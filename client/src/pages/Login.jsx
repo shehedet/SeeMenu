@@ -43,6 +43,25 @@ function Login() {
         setMessage("Login successful.");
     };
 
+    
+    const handleGoogleLogin = async () => {
+        setMessage("");
+        setLoading(true);
+
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: "google",
+            options: {
+                redirectTo: `${window.location.origin}/`
+            }
+        });
+
+        if (error) {
+            console.error("Google login error:", error);
+            setMessage(error.message);
+            setLoading(false);
+        }
+    };
+
     return (
         <div>
             <h1>Login</h1>
@@ -76,6 +95,14 @@ function Login() {
 
                 <button type="submit" disabled={loading}>
                     {loading ? "Logging in..." : "Login"}
+                </button>
+                
+                <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    disabled={loading}
+                >
+                    {loading ? "Redirecting..." : "Continue with Google"}
                 </button>
             </form>
 

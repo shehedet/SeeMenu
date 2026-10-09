@@ -11,32 +11,76 @@ export function useAuth() {
 export function AuthProvider({ children }) {
     const [session, setSession] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [profile, setProfile] = useState(null);
+
+    const fetchProfile = async (userId) => {
+        const { data, error } = await supabase
+            .from("profiles")
+            .select("id, username, phone, role, avatar_url")
+            .eq("id", userId)
+            .single();
+
+        if (error) {
+            console.error("Error fetching profile:", error);
+            setProfile(null);
+            return;
+        }
+
+        setProfile(data);
+    };
 
     useEffect(() => {
-        const getSession = async () => {
+        let isMounted = true;
+
+        const initializeAuth = async () => {
             const { data, error } = await supabase.auth.getSession();
 
             if (error) {
                 console.error("Error getting session:", error);
             }
 
+            if (!isMounted) return;
+
             setSession(data.session);
-            setLoading(false);
+
+            if (data.session?.user) {
+                await fetchProfile(data.session.user.id);
+            } else {
+                setProfile(null);
+            }
+
+            if (isMounted) {
+                setLoading(false);
+            }
         };
 
-        getSession();
+        initializeAuth();
 
         const {
             data: { subscription }
-        } = supabase.auth.onAuthStateChange(
-            (event, currentSession) => {
-                console.log("Auth event:", event);
+        } = supabase.auth.onAuthStateChange((event, currentSession) => {
+            setSession(currentSession);
 
-                setSession(currentSession);
+            if (event === "SIGNED_OUT" || !currentSession) {
+                setProfile(null);
+                setLoading(false);
+                return;
             }
-        );
+
+            if (event === "SIGNED_IN" || event === "USER_UPDATED") {
+                setLoading(true);
+
+                // Defer the database request until after the auth callback.
+                setTimeout(() => {
+                    fetchProfile(currentSession.user.id).finally(() => {
+                        setLoading(false);
+                    });
+                }, 0);
+            }
+        });
 
         return () => {
+            isMounted = false;
             subscription.unsubscribe();
         };
     }, []);
@@ -54,6 +98,8 @@ export function AuthProvider({ children }) {
             value={{
                 session,
                 user: session?.user ?? null,
+                profile,
+                role: profile?.role ?? null,
                 loading,
                 signOut
             }}
