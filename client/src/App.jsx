@@ -76,28 +76,69 @@
 
 
 
+
+import { Navigate, Route, Routes } from "react-router-dom";
+
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+
+import ContributorTest from "./pages/ContributorTest";
+import ModeratorTest from "./pages/ModeratorTest";
+import AdminTest from "./pages/AdminTest";
+
+import ProtectedRoute from "./components/ProtectedRoute";
+
 function App() {
     return (
-        <main className="min-h-screen bg-stone-50 p-8">
-            <section className="mx-auto max-w-4xl rounded-2xl bg-white p-8 shadow-sm">
-                <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-orange-700">
-                    Community-powered food discovery
-                </p>
+        <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
 
-                <h1 className="text-4xl font-bold tracking-tight text-stone-900">
-                    Welcome to SeeMenu
-                </h1>
+            <Route
+                element={
+                    <ProtectedRoute
+                        allowedRoles={[
+                            "contributor",
+                            "moderator",
+                            "admin"
+                        ]}
+                    />
+                }
+            >
+                <Route
+                    path="/contributor-test"
+                    element={<ContributorTest />}
+                />
+            </Route>
 
-                <p className="mt-4 max-w-xl leading-7 text-stone-600">
-                    Discover restaurants, explore community-uploaded menus,
-                    and find your next favourite meal.
-                </p>
+            <Route
+                element={
+                    <ProtectedRoute
+                        allowedRoles={["moderator", "admin"]}
+                    />
+                }
+            >
+                <Route
+                    path="/moderator-test"
+                    element={<ModeratorTest />}
+                />
+            </Route>
 
-                <button className="mt-6 rounded-lg bg-orange-700 px-5 py-3 font-semibold text-white transition hover:bg-orange-800">
-                    Explore restaurants
-                </button>
-            </section>
-        </main>
+            <Route
+                element={
+                    <ProtectedRoute allowedRoles={["admin"]} />
+                }
+            >
+                <Route
+                    path="/admin-test"
+                    element={<AdminTest />}
+                />
+            </Route>
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
     );
 }
 

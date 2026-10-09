@@ -1,42 +1,201 @@
-import { useAuth } from "../context/AuthContext";
+
+import { useMemo, useState } from "react";
+import { ArrowDown, Search, Utensils } from "lucide-react";
+
+import Navbar from "../components/Navbar";
+import RestaurantCard from "../components/RestaurantCard";
+
+const restaurants = [
+    {
+        id: 1,
+        name: "Demo Restaurant One",
+        area: "Dhanmondi",
+        city: "Dhaka",
+        rating: 4.5,
+        foodTypes: ["Bangladeshi", "Rice"],
+        image:
+            "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80"
+    },
+    {
+        id: 2,
+        name: "Demo Restaurant Two",
+        area: "Banani",
+        city: "Dhaka",
+        rating: 4.2,
+        foodTypes: ["Fast Food", "Burgers"],
+        image:
+            "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=900&q=80"
+    },
+    {
+        id: 3,
+        name: "Demo Restaurant Three",
+        area: "Uttara",
+        city: "Dhaka",
+        rating: 4.7,
+        foodTypes: ["Cafe", "Desserts"],
+        image:
+            "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=900&q=80"
+    }
+];
 
 function Home() {
-    const { user, profile, role, loading, signOut } = useAuth();
+    const [searchQuery, setSearchQuery] = useState("");
 
-    if (loading) {
-        return <p>Loading account...</p>;
-    }
+    const filteredRestaurants = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
 
-    const handleLogout = async () => {
-        await signOut();
-    };
+        if (!query) {
+            return restaurants;
+        }
+
+        return restaurants.filter((restaurant) => {
+            const searchableText = [
+                restaurant.name,
+                restaurant.area,
+                restaurant.city,
+                ...restaurant.foodTypes
+            ]
+                .join(" ")
+                .toLowerCase();
+
+            return searchableText.includes(query);
+        });
+    }, [searchQuery]);
 
     return (
-        <div>
-            <h1>SeeMenu</h1>
+        <div className="min-h-screen bg-paper text-ink">
+            <Navbar
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+            />
 
-            {user ? (
-                <div>
-                    <p>You are logged in.</p>
-                    <p>Email: {user.email}</p>
+            <main>
+                <section className="border-b border-line">
+                    <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
+                        <p className="mb-5 flex items-center gap-2 text-sm font-semibold uppercase tracking-widest">
+                            <Utensils size={17} />
+                            Your community food directory
+                        </p>
 
-                    {profile ? (
+                        <h1 className="max-w-4xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+                            Find the menu.
+                            <br />
+                            <span className="font-normal">
+                                Know before you go.
+                            </span>
+                        </h1>
+
+                        <p className="mt-6 max-w-2xl text-base leading-7 text-muted sm:text-lg">
+                            Explore food places across Bangladesh and discover
+                            menus shared by the people who visit them.
+                        </p>
+
+                        <form
+                            role="search"
+                            className="mt-8 flex max-w-2xl items-center border-2 border-ink bg-white p-1"
+                            onSubmit={(event) => event.preventDefault()}
+                        >
+                            <Search
+                                size={20}
+                                className="ml-3 shrink-0"
+                            />
+
+                            <input
+                                type="search"
+                                value={searchQuery}
+                                onChange={(event) =>
+                                    setSearchQuery(event.target.value)
+                                }
+                                placeholder="Try biryani, Dhanmondi, or a restaurant..."
+                                aria-label="Search food places"
+                                className="min-w-0 flex-1 bg-transparent px-3 py-3 outline-none placeholder:text-muted"
+                            />
+
+                            <button
+                                type="submit"
+                                className="border-l-2 border-ink bg-mint px-4 py-3 text-sm font-bold hover:bg-teal sm:px-6"
+                            >
+                                Search
+                            </button>
+                        </form>
+
+                        <p className="mt-3 text-sm text-muted">
+                            Search by restaurant, food type, or area.
+                        </p>
+                    </div>
+                </section>
+
+                <section
+                    id="restaurants"
+                    className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8"
+                >
+                    <div className="mb-7 flex flex-wrap items-end justify-between gap-4 border-b-2 border-ink pb-5">
                         <div>
-                            <p>Username: {profile.username}</p>
-                            <p>Phone: {profile.phone || "Not provided"}</p>
-                            <p>Role: {role}</p>
+                            <p className="text-sm font-semibold uppercase tracking-widest">
+                                Explore
+                            </p>
+
+                            <h2 className="mt-2 text-2xl font-bold sm:text-3xl">
+                                Food places
+                            </h2>
+
+                            <p className="mt-2 text-sm text-muted">
+                                {searchQuery.trim()
+                                    ? `${filteredRestaurants.length} matching places`
+                                    : `${restaurants.length} sample places`}
+                            </p>
+                        </div>
+
+                        <a
+                            href="#restaurants"
+                            className="flex items-center gap-2 border-b border-ink pb-1 text-sm font-semibold hover:border-teal"
+                        >
+                            Browse listings
+                            <ArrowDown size={16} />
+                        </a>
+                    </div>
+
+                    {filteredRestaurants.length > 0 ? (
+                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                            {filteredRestaurants.map((restaurant) => (
+                                <RestaurantCard
+                                    key={restaurant.id}
+                                    restaurant={restaurant}
+                                />
+                            ))}
                         </div>
                     ) : (
-                        <p>Could not load your SeeMenu profile.</p>
-                    )}
+                        <div className="border-y border-line py-12">
+                            <h3 className="text-xl font-bold">
+                                No matching places
+                            </h3>
 
-                    <button onClick={handleLogout}>
-                        Logout
-                    </button>
+                            <p className="mt-2 text-muted">
+                                Try another restaurant name, food type, or
+                                area.
+                            </p>
+
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery("")}
+                                className="mt-5 border-2 border-ink bg-mint px-4 py-2 font-semibold hover:bg-teal"
+                            >
+                                Clear search
+                            </button>
+                        </div>
+                    )}
+                </section>
+            </main>
+
+            <footer className="border-t-2 border-ink">
+                <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+                    <p>
+                        <span className="font-bold text-ink">SeeMenu</span>
+                        {" "}— Menus made easier to find.
+                    </p>
+                    <p>Community-powered food discovery.</p>
                 </div>
-            ) : (
-                <p>You are not logged in.</p>
-            )}
+            </footer>
         </div>
     );
 }
