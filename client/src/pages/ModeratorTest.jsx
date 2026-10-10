@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import Navbar from "../components/Navbar";
 import { supabase } from "../lib/supabase";
 
+
 function formatDate(value) {
     if (!value) return "Date unavailable";
 

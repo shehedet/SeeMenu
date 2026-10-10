@@ -1,9 +1,17 @@
-
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, MapPin, Utensils, ExternalLink, X } from "lucide-react";
+import {
+    ArrowLeft,
+    MapPin,
+    Utensils,
+    ExternalLink,
+    X,
+    Flag,
+} from "lucide-react";
 
 import Navbar from "../components/Navbar";
+import { useAuth } from "../context/AuthContext";
+import { supabase } from "../lib/supabase";
 
 function RestaurantDetails() {
     const { id } = useParams();
@@ -16,6 +24,14 @@ function RestaurantDetails() {
     const [isMenusLoading, setIsMenusLoading] = useState(true);
     const [menusError, setMenusError] = useState("");
     const [selectedImage, setSelectedImage] = useState(null);
+
+    const { user, loading: authLoading } = useAuth();
+    const [reportingImage, setReportingImage] = useState(null);
+    const [reportReason, setReportReason] = useState("");
+    const [reportDetails, setReportDetails] = useState("");
+    const [reportSubmitting, setReportSubmitting] = useState(false);
+    const [reportError, setReportError] = useState("");
+    const [reportSuccess, setReportSuccess] = useState("");
 
     useEffect(() => {
         const controller = new AbortController();
@@ -98,6 +114,101 @@ function RestaurantDetails() {
 
         return () => controller.abort();
     }, [id]);
+
+
+    
+
+
+    const openReportForm = (menu) => {
+        setReportingImage(menu);
+        setReportReason("");
+        setReportDetails("");
+        setReportError("");
+        setReportSuccess("");
+    };
+
+    const closeReportForm = () => {
+        setReportingImage(null);
+        setReportReason("");
+        setReportDetails("");
+        setReportError("");
+        setReportSuccess("");
+    };
+
+    const handleReportSubmit = async (event) => {
+        event.preventDefault();
+
+        if (!user) {
+            setReportError("Please log in before submitting a report.");
+            return;
+        }
+
+        if (!reportingImage?.id) {
+            setReportError("Unable to identify the menu photo.");
+            return;
+        }
+
+        if (!reportReason) {
+            setReportError("Please select a reason for reporting this photo.");
+            return;
+        }
+
+        if (reportSubmitting) return;
+
+        setReportSubmitting(true);
+        setReportError("");
+        setReportSuccess("");
+
+        try {
+            const { error: submitError } = await supabase
+                .from("reports")
+                .insert({
+                    reported_by: user.id,
+                    menu_image_id: reportingImage.id,
+                    reason: reportReason,
+                    details: reportDetails.trim() || null,
+                    status: "pending",
+                });
+
+            if (submitError) {
+                if (submitError.code === "23505") {
+                    throw new Error(
+                        "You have already reported this menu photo."
+                    );
+                }
+
+                if (submitError.code === "42501") {
+                    throw new Error(
+                        "You do not have permission to submit this report."
+                    );
+                }
+
+                if (submitError.code === "23503") {
+                    throw new Error(
+                        "This menu photo no longer exists or is unavailable."
+                    );
+                }
+
+                throw new Error(
+                    submitError.message || "Unable to submit your report."
+                );
+            }
+
+            setReportSuccess(
+                "Report submitted. A moderator will review this photo."
+            );
+            setReportReason("");
+            setReportDetails("");
+        } catch (err) {
+            setReportError(err.message || "Something went wrong.");
+        } finally {
+            setReportSubmitting(false);
+        }
+    };
+
+
+
+
 
 
     const location = restaurant
@@ -241,26 +352,182 @@ function RestaurantDetails() {
 
                                     <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                                         {menuImages.map((menu) => (
-                                            <button
+                                            <div
                                                 key={menu.id}
-                                                type="button"
-                                                onClick={() => setSelectedImage(menu)}
-                                                className="group min-w-0 border border-ink text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
-                                                aria-label={`View menu photo${menu.caption ? `: ${menu.caption}` : ""}`}
+                                                className="min-w-0 border border-ink"
                                             >
-                                                <img
-                                                    src={menu.image_url}
-                                                    alt={menu.caption || "Restaurant menu"}
-                                                    loading="lazy"
-                                                    className="h-48 w-full object-cover transition-opacity group-hover:opacity-80 sm:h-60"
-                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedImage(menu)}
+                                                    className="group block w-full min-w-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                                                    aria-label={`View menu photo${menu.caption ? `: ${menu.caption}` : ""}`}
+                                                >
+                                                    <img
+                                                        src={menu.image_url}
+                                                        alt={menu.caption || "Restaurant menu"}
+                                                        loading="lazy"
+                                                        className="h-48 w-full object-cover transition-opacity group-hover:opacity-80 sm:h-60"
+                                                    />
 
-                                                {menu.caption && (
-                                                    <span className="block border-t border-line p-2 text-sm">
-                                                        {menu.caption}
-                                                    </span>
-                                                )}
-                                            </button>
+                                                    {menu.caption && (
+                                                        <span className="block border-t border-line p-2 text-sm">
+                                                            {menu.caption}
+                                                        </span>
+                                                    )}
+                                                </button>
+
+                                                <div className="border-t border-line p-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openReportForm(menu)}
+                                                        className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold underline underline-offset-4 hover:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                                                        aria-label="Report this menu photo"
+                                                    >
+                                                        <Flag size={15} />
+                                                        Report photo
+                                                    </button>
+
+                                                    {reportingImage?.id === menu.id && (
+                                                        <div className="mt-3 border-t border-line pt-3">
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <h3 className="font-bold">
+                                                                    Report this photo
+                                                                </h3>
+
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={closeReportForm}
+                                                                    className="shrink-0 underline underline-offset-4"
+                                                                    aria-label="Close report form"
+                                                                >
+                                                                    Cancel
+                                                                </button>
+                                                            </div>
+
+                                                            {authLoading ? (
+                                                                <p className="mt-3 text-sm text-muted" role="status">
+                                                                    Checking your sign-in status...
+                                                                </p>
+                                                            ) : !user ? (
+                                                                <p className="mt-3 text-sm leading-6 text-muted">
+                                                                    You need to{" "}
+                                                                    <Link
+                                                                        to="/login"
+                                                                        className="font-semibold text-ink underline underline-offset-4"
+                                                                    >
+                                                                        log in
+                                                                    </Link>{" "}
+                                                                    before reporting a photo.
+                                                                </p>
+                                                            ) : reportSuccess ? (
+                                                                <div className="mt-3" role="status">
+                                                                    <p className="text-sm leading-6">
+                                                                        {reportSuccess}
+                                                                    </p>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={closeReportForm}
+                                                                        className="mt-3 border border-ink bg-mint px-3 py-2 text-sm font-semibold hover:bg-teal"
+                                                                    >
+                                                                        Done
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <form
+                                                                    onSubmit={handleReportSubmit}
+                                                                    className="mt-3 space-y-3"
+                                                                >
+                                                                    <div>
+                                                                        <label
+                                                                            htmlFor={`report-reason-${menu.id}`}
+                                                                            className="mb-1 block text-sm font-semibold"
+                                                                        >
+                                                                            Reason
+                                                                        </label>
+
+                                                                        <select
+                                                                            id={`report-reason-${menu.id}`}
+                                                                            value={reportReason}
+                                                                            onChange={(event) =>
+                                                                                setReportReason(event.target.value)
+                                                                            }
+                                                                            required
+                                                                            disabled={reportSubmitting}
+                                                                            className="min-h-11 w-full min-w-0 border border-ink bg-paper px-3 py-2 text-sm"
+                                                                        >
+                                                                            <option value="">
+                                                                                Select a reason
+                                                                            </option>
+                                                                            <option value="Incorrect or outdated menu">
+                                                                                Incorrect or outdated menu
+                                                                            </option>
+                                                                            <option value="Misleading or edited photo">
+                                                                                Misleading or edited photo
+                                                                            </option>
+                                                                            <option value="Inappropriate content">
+                                                                                Inappropriate content
+                                                                            </option>
+                                                                            <option value="Spam or duplicate photo">
+                                                                                Spam or duplicate photo
+                                                                            </option>
+                                                                            <option value="Other">
+                                                                                Other
+                                                                            </option>
+                                                                        </select>
+                                                                    </div>
+
+                                                                    <div>
+                                                                        <label
+                                                                            htmlFor={`report-details-${menu.id}`}
+                                                                            className="mb-1 block text-sm font-semibold"
+                                                                        >
+                                                                            Additional details (optional)
+                                                                        </label>
+
+                                                                        <textarea
+                                                                            id={`report-details-${menu.id}`}
+                                                                            value={reportDetails}
+                                                                            onChange={(event) =>
+                                                                                setReportDetails(event.target.value)
+                                                                            }
+                                                                            maxLength={1000}
+                                                                            rows={3}
+                                                                            disabled={reportSubmitting}
+                                                                            placeholder="Explain the issue..."
+                                                                            className="w-full min-w-0 resize-y border border-ink bg-paper px-3 py-2 text-sm"
+                                                                        />
+                                                                    </div>
+
+                                                                    {reportError && (
+                                                                        <p
+                                                                            className="text-sm text-red-700"
+                                                                            role="alert"
+                                                                        >
+                                                                            {reportError}
+                                                                        </p>
+                                                                    )}
+
+                                                                    <button
+                                                                        type="submit"
+                                                                        disabled={reportSubmitting || !reportReason}
+                                                                        className="min-h-11 w-full border-2 border-ink bg-pink px-3 py-2 text-sm font-semibold hover:bg-mint disabled:cursor-not-allowed disabled:opacity-60"
+                                                                    >
+                                                                        {reportSubmitting
+                                                                            ? "Submitting..."
+                                                                            : "Submit report"}
+                                                                    </button>
+
+                                                                    <p className="text-xs leading-5 text-muted">
+                                                                        Reports are reviewed by moderators.
+                                                                        Reporting a photo does not automatically
+                                                                        remove it.
+                                                                    </p>
+                                                                </form>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
                                         ))}
                                     </div>
                                 </>
