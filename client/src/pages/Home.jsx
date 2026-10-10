@@ -1,45 +1,51 @@
-
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, Search, Utensils } from "lucide-react";
 
 import Navbar from "../components/Navbar";
 import RestaurantCard from "../components/RestaurantCard";
 
-const restaurants = [
-    {
-        id: 1,
-        name: "Demo Restaurant One",
-        area: "Dhanmondi",
-        city: "Dhaka",
-        rating: 4.5,
-        foodTypes: ["Bangladeshi", "Rice"],
-        image:
-            "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=900&q=80"
-    },
-    {
-        id: 2,
-        name: "Demo Restaurant Two",
-        area: "Banani",
-        city: "Dhaka",
-        rating: 4.2,
-        foodTypes: ["Fast Food", "Burgers"],
-        image:
-            "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=900&q=80"
-    },
-    {
-        id: 3,
-        name: "Demo Restaurant Three",
-        area: "Uttara",
-        city: "Dhaka",
-        rating: 4.7,
-        foodTypes: ["Cafe", "Desserts"],
-        image:
-            "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=900&q=80"
-    }
-];
 
 function Home() {
+
     const [searchQuery, setSearchQuery] = useState("");
+    const [restaurants, setRestaurants] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        const controller = new AbortController();
+
+        async function fetchRestaurants() {
+            try {
+                setIsLoading(true);
+                setError("");
+
+                const response = await fetch(
+                    "http://localhost:5000/api/restaurants",
+                    { signal: controller.signal }
+                );
+
+                if (!response.ok) {
+                    throw new Error("Unable to load restaurants.");
+                }
+
+                const result = await response.json();
+                setRestaurants(result.data);
+            } catch (err) {
+                if (err.name !== "AbortError") {
+                    setError(err.message || "Something went wrong.");
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setIsLoading(false);
+                }
+            }
+        }
+
+        fetchRestaurants();
+
+        return () => controller.abort();
+    }, []);
 
     const filteredRestaurants = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -51,16 +57,19 @@ function Home() {
         return restaurants.filter((restaurant) => {
             const searchableText = [
                 restaurant.name,
+                restaurant.description,
+                restaurant.address,
                 restaurant.area,
                 restaurant.city,
-                ...restaurant.foodTypes
             ]
+                .filter(Boolean)
                 .join(" ")
                 .toLowerCase();
 
             return searchableText.includes(query);
         });
-    }, [searchQuery]);
+    }, [searchQuery, restaurants]);
+
 
     return (
         <div className="min-h-screen bg-paper text-ink">
@@ -140,9 +149,13 @@ function Home() {
                             </h2>
 
                             <p className="mt-2 text-sm text-muted">
-                                {searchQuery.trim()
-                                    ? `${filteredRestaurants.length} matching places`
-                                    : `${restaurants.length} sample places`}
+                                {isLoading
+                                    ? "Loading places..."
+                                    : error
+                                        ? "Places unavailable"
+                                        : searchQuery.trim()
+                                            ? `${filteredRestaurants.length} matching places`
+                                            : `${restaurants.length} places listed`}
                             </p>
                         </div>
 
@@ -155,7 +168,25 @@ function Home() {
                         </a>
                     </div>
 
-                    {filteredRestaurants.length > 0 ? (
+                    {isLoading ? (
+                        <div className="border-y border-line py-12" role="status">
+                            <p className="text-lg font-semibold">Loading food places...</p>
+                            <p className="mt-2 text-sm text-muted">
+                                Fetching the latest approved restaurant listings.
+                            </p>
+                        </div>
+                    ) : error ? (
+                        <div className="border-y border-line py-12" role="alert">
+                            <h3 className="text-xl font-bold">
+                                Couldn't load food places
+                            </h3>
+                            <p className="mt-2 text-muted">{error}</p>
+                            <p className="mt-2 text-sm text-muted">
+                                Check that your Express server is running on port 5000,
+                                then reload the page.
+                            </p>
+                        </div>
+                    ) : filteredRestaurants.length > 0 ? (
                         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
                             {filteredRestaurants.map((restaurant) => (
                                 <RestaurantCard
@@ -167,21 +198,26 @@ function Home() {
                     ) : (
                         <div className="border-y border-line py-12">
                             <h3 className="text-xl font-bold">
-                                No matching places
+                                {restaurants.length === 0
+                                    ? "No food places yet"
+                                    : "No matching places"}
                             </h3>
 
                             <p className="mt-2 text-muted">
-                                Try another restaurant name, food type, or
-                                area.
+                                {restaurants.length === 0
+                                    ? "Approved restaurant listings will appear here."
+                                    : "Try another restaurant name or area."}
                             </p>
 
-                            <button
-                                type="button"
-                                onClick={() => setSearchQuery("")}
-                                className="mt-5 border-2 border-ink bg-mint px-4 py-2 font-semibold hover:bg-teal"
-                            >
-                                Clear search
-                            </button>
+                            {searchQuery.trim() && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchQuery("")}
+                                    className="mt-5 border-2 border-ink bg-mint px-4 py-2 font-semibold hover:bg-teal"
+                                >
+                                    Clear search
+                                </button>
+                            )}
                         </div>
                     )}
                 </section>
