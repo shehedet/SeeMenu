@@ -1,4 +1,4 @@
-# SeeMenu — Discover Local Food, One Menu at a Time
+# SeeMenu
 
 **SeeMenu is a community-driven restaurant and food menu discovery platform designed for Bangladesh.**
 
