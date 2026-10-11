@@ -44,6 +44,11 @@ function RestaurantDetails() {
     const [voteSubmitting, setVoteSubmitting] = useState(false);
     const [votesError, setVotesError] = useState("");
 
+    const [menuVotes, setMenuVotes] = useState({});
+    const [menuVotesLoading, setMenuVotesLoading] = useState(true);
+    const [submittingMenuVoteId, setSubmittingMenuVoteId] = useState(null);
+    const [menuVotesError, setMenuVotesError] = useState("");
+
     useEffect(() => {
         const controller = new AbortController();
 
@@ -220,6 +225,63 @@ function RestaurantDetails() {
 
 
 
+    const refreshMenuImageVotes = useCallback(async () => {
+        setMenuVotesLoading(true);
+        setMenuVotesError("");
+
+        try {
+            if (menuImages.length === 0) {
+            setMenuVotes({});
+            return;
+            }
+
+            const menuImageIds = menuImages.map((menu) => menu.id);
+
+            const { data, error } = await supabase
+            .from("menu_image_votes")
+            .select("menu_image_id, user_id, vote")
+            .in("menu_image_id", menuImageIds);
+
+            if (error) throw error;
+
+            const nextVotes = {};
+
+            for (const menu of menuImages) {
+            nextVotes[menu.id] = {
+                upvoteCount: 0,
+                downvoteCount: 0,
+                userVote: null,
+            };
+            }
+
+            for (const vote of data ?? []) {
+            const photoVote = nextVotes[vote.menu_image_id];
+
+            if (!photoVote) continue;
+
+            if (vote.vote === "upvote") {
+                photoVote.upvoteCount += 1;
+            } else if (vote.vote === "downvote") {
+                photoVote.downvoteCount += 1;
+            }
+
+            if (user && vote.user_id === user.id) {
+                photoVote.userVote = vote.vote;
+            }
+            }
+
+            setMenuVotes(nextVotes);
+        } catch (error) {
+            console.error("Error fetching menu photo votes:", error);
+            setMenuVotesError("Could not load menu photo votes.");
+        } finally {
+            setMenuVotesLoading(false);
+        }
+    }, [menuImages, user]);
+
+
+
+
 
     const refreshRestaurantVotes = useCallback(async () => {
         setVotesLoading(true);
@@ -318,6 +380,70 @@ function RestaurantDetails() {
     };
 
 
+
+    const handleMenuImageVote = async (menuImageId, vote) => {
+        if (!user) {
+            setMenuVotesError("Please log in to vote on menu photos.");
+            return;
+        }
+
+        if (submittingMenuVoteId) return;
+
+        const currentVote = menuVotes[menuImageId]?.userVote ?? null;
+
+        setSubmittingMenuVoteId(menuImageId);
+        setMenuVotesError("");
+
+        try {
+            if (currentVote === vote) {
+            // Clicking the same vote removes it.
+            const { error } = await supabase
+                .from("menu_image_votes")
+                .delete()
+                .eq("menu_image_id", menuImageId)
+                .eq("user_id", user.id);
+
+            if (error) throw error;
+            } else if (currentVote) {
+            // Switch the existing vote.
+            const { error } = await supabase
+                .from("menu_image_votes")
+                .update({
+                vote,
+                updated_at: new Date().toISOString(),
+                })
+                .eq("menu_image_id", menuImageId)
+                .eq("user_id", user.id);
+
+            if (error) throw error;
+            } else {
+            // Create a new vote.
+            const { error } = await supabase
+                .from("menu_image_votes")
+                .insert({
+                menu_image_id: menuImageId,
+                user_id: user.id,
+                vote,
+                });
+
+            if (error) throw error;
+            }
+
+            await refreshMenuImageVotes();
+        } catch (error) {
+            console.error("Error voting on menu photo:", error);
+            setMenuVotesError("Your vote could not be saved. Please try again.");
+        } finally {
+            setSubmittingMenuVoteId(null);
+        }
+    };
+
+
+
+
+    useEffect(() => {
+        refreshMenuImageVotes();
+    }, [refreshMenuImageVotes]);
 
 
 
@@ -569,6 +695,60 @@ function RestaurantDetails() {
                                                         </span>
                                                     )}
                                                 </button>
+
+
+
+                                                <div className="flex items-center gap-4 border-t border-line p-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleMenuImageVote(menu.id, "upvote")}
+                                                        disabled={
+                                                        authLoading ||
+                                                        menuVotesLoading ||
+                                                        submittingMenuVoteId !== null
+                                                        }
+                                                        aria-pressed={menuVotes[menu.id]?.userVote === "upvote"}
+                                                        aria-label={`Upvote menu photo. ${
+                                                        menuVotes[menu.id]?.upvoteCount ?? 0
+                                                        } upvotes`}
+                                                        className={`inline-flex items-center gap-1 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                                        menuVotes[menu.id]?.userVote === "upvote"
+                                                            ? "text-teal-700"
+                                                            : "text-ink hover:text-teal-700"
+                                                        }`}
+                                                    >
+                                                        <ThumbsUp size={16} />
+                                                        <span>{menuVotes[menu.id]?.upvoteCount ?? 0}</span>
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleMenuImageVote(menu.id, "downvote")}
+                                                        disabled={
+                                                        authLoading ||
+                                                        menuVotesLoading ||
+                                                        submittingMenuVoteId !== null
+                                                        }
+                                                        aria-pressed={menuVotes[menu.id]?.userVote === "downvote"}
+                                                        aria-label={`Downvote menu photo. ${
+                                                        menuVotes[menu.id]?.downvoteCount ?? 0
+                                                        } downvotes`}
+                                                        className={`inline-flex items-center gap-1 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                                        menuVotes[menu.id]?.userVote === "downvote"
+                                                            ? "text-pink-600"
+                                                            : "text-ink hover:text-pink-600"
+                                                        }`}
+                                                    >
+                                                        <ThumbsDown size={16} />
+                                                        <span>{menuVotes[menu.id]?.downvoteCount ?? 0}</span>
+                                                    </button>
+
+                                                    {/* Keep your existing Report photo button and report form here. */}
+                                                </div>
+
+
+
+
 
                                                 <div className="border-t border-line p-2">
                                                     <button
