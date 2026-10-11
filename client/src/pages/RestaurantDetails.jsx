@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+
 import {
     ArrowLeft,
     MapPin,
@@ -7,6 +9,8 @@ import {
     ExternalLink,
     X,
     Flag,
+    ThumbsUp,
+    ThumbsDown,
 } from "lucide-react";
 
 import Navbar from "../components/Navbar";
@@ -32,6 +36,13 @@ function RestaurantDetails() {
     const [reportSubmitting, setReportSubmitting] = useState(false);
     const [reportError, setReportError] = useState("");
     const [reportSuccess, setReportSuccess] = useState("");
+   
+    const [likeCount, setLikeCount] = useState(0);
+    const [dislikeCount, setDislikeCount] = useState(0);
+    const [userVote, setUserVote] = useState(null);
+    const [votesLoading, setVotesLoading] = useState(true);
+    const [voteSubmitting, setVoteSubmitting] = useState(false);
+    const [votesError, setVotesError] = useState("");
 
     useEffect(() => {
         const controller = new AbortController();
@@ -210,6 +221,106 @@ function RestaurantDetails() {
 
 
 
+    const refreshRestaurantVotes = useCallback(async () => {
+        setVotesLoading(true);
+        setVotesError("");
+
+        try {
+            const { data, error: fetchError } = await supabase
+                .from("restaurant_votes")
+                .select("user_id, vote")
+                .eq("restaurant_id", id);
+
+            if (fetchError) throw fetchError;
+
+            const votes = data ?? [];
+
+            setLikeCount(
+                votes.filter((item) => item.vote === "like").length
+            );
+
+            setDislikeCount(
+                votes.filter((item) => item.vote === "dislike").length
+            );
+
+            setUserVote(
+                user
+                    ? votes.find((item) => item.user_id === user.id)?.vote ?? null
+                    : null
+            );
+        } catch (err) {
+            setVotesError(
+                err.message || "Unable to load restaurant votes."
+            );
+        } finally {
+            setVotesLoading(false);
+        }
+    }, [id, user]);
+
+    useEffect(() => {
+        refreshRestaurantVotes();
+    }, [refreshRestaurantVotes]);
+
+    const handleRestaurantVote = async (vote) => {
+        if (!user) {
+            setVotesError("Please log in to vote on this restaurant.");
+            return;
+        }
+
+        if (voteSubmitting) return;
+
+        setVoteSubmitting(true);
+        setVotesError("");
+
+        try {
+            let result;
+
+            if (userVote === vote) {
+                // Clicking the selected vote removes it.
+                result = await supabase
+                    .from("restaurant_votes")
+                    .delete()
+                    .eq("restaurant_id", id)
+                    .eq("user_id", user.id);
+            } else if (userVote) {
+                // Change the existing vote.
+                result = await supabase
+                    .from("restaurant_votes")
+                    .update({
+                        vote,
+                        updated_at: new Date().toISOString(),
+                    })
+                    .eq("restaurant_id", id)
+                    .eq("user_id", user.id);
+            } else {
+                // Create a new vote.
+                result = await supabase
+                    .from("restaurant_votes")
+                    .insert({
+                        restaurant_id: id,
+                        user_id: user.id,
+                        vote,
+                    });
+            }
+
+            if (result.error) throw result.error;
+
+            await refreshRestaurantVotes();
+        } catch (err) {
+            setVotesError(
+                err.code === "23505"
+                    ? "You have already voted. Refresh and try again."
+                    : err.message || "Unable to submit your vote."
+            );
+        } finally {
+            setVoteSubmitting(false);
+        }
+    };
+
+
+
+
+
 
     const location = restaurant
         ? [
@@ -323,6 +434,89 @@ function RestaurantDetails() {
                                 )}
                             </div>
                         </section>
+
+
+
+
+                        <div className="mt-8 border-t border-line pt-5">
+                            <h2 className="text-lg font-bold">
+                                Community votes
+                            </h2>
+
+                            <p className="mt-1 text-sm text-muted">
+                                Help others decide whether this restaurant is worth visiting.
+                            </p>
+
+                            {votesLoading ? (
+                                <p className="mt-4 text-sm text-muted" role="status">
+                                    Loading votes...
+                                </p>
+                            ) : (
+                                <div className="mt-4 flex flex-wrap items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRestaurantVote("like")}
+                                        disabled={voteSubmitting || authLoading}
+                                        aria-pressed={userVote === "like"}
+                                        className={`inline-flex min-h-11 items-center gap-2 border-2 border-ink px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+                                            userVote === "like"
+                                                ? "bg-mint"
+                                                : "bg-paper hover:bg-mint"
+                                        }`}
+                                    >
+                                        <ThumbsUp size={17} />
+                                        Like ({likeCount})
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRestaurantVote("dislike")}
+                                        disabled={voteSubmitting || authLoading}
+                                        aria-pressed={userVote === "dislike"}
+                                        className={`inline-flex min-h-11 items-center gap-2 border-2 border-ink px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+                                            userVote === "dislike"
+                                                ? "bg-pink"
+                                                : "bg-paper hover:bg-pink"
+                                        }`}
+                                    >
+                                        <ThumbsDown size={17} />
+                                        Dislike ({dislikeCount})
+                                    </button>
+
+                                    {voteSubmitting && (
+                                        <span className="text-sm text-muted" role="status">
+                                            Saving vote...
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
+                            {votesError && (
+                                <p className="mt-3 text-sm text-red-700" role="alert">
+                                    {votesError}
+                                    {!user && (
+                                        <>
+                                            {" "}
+                                            <Link
+                                                to="/login"
+                                                className="font-semibold underline underline-offset-4"
+                                            >
+                                                Log in
+                                            </Link>
+                                        </>
+                                    )}
+                                </p>
+                            )}
+
+                            {userVote && (
+                                <p className="mt-2 text-sm text-muted">
+                                    You voted {userVote === "like" ? "like" : "dislike"}.
+                                    Click your selected option again to remove your vote.
+                                </p>
+                            )}
+                        </div>
+
+
 
                         
                         <section className="py-10 sm:py-12">

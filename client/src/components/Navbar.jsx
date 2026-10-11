@@ -99,6 +99,16 @@ function Navbar({ searchQuery, onSearchChange }) {
                                         <p className="mt-2 text-xs text-muted">
                                             Role: {profile?.role || "Loading..."}
                                         </p>
+                                        {profile?.role === "contributor" && (
+                                            <Link
+                                                to="/request-restaurant"
+                                                onClick={() => setAccountMenuOpen(false)}
+                                                className="block border-t border-line px-4 py-3 text-sm font-semibold hover:bg-mint"
+                                            >
+                                                Suggest a restaurant
+                                            </Link>
+                                        )}
+                                        
                                     </div>
 
                                     <button

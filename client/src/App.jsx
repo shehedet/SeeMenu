@@ -8,6 +8,8 @@ import MenuUpload from "./pages/MenuUpload";
 import ContributorTest from "./pages/ContributorTest";
 import ModeratorTest from "./pages/ModeratorTest";
 import AdminTest from "./pages/AdminTest";
+import RestaurantRequest from "./pages/RestaurantRequest";
+import ContributorProfile from "./pages/ContributorProfile";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -18,6 +20,9 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/restaurants/:id" element={<RestaurantDetails />} />
+
+            <Route path="/contributors/:username" element={<ContributorProfile />} />
+
 
             <Route
                 element={
@@ -38,6 +43,7 @@ function App() {
 
             <Route element={<ProtectedRoute allowedRoles={["contributor"]} />}>
                 <Route path="/upload-menu" element={<MenuUpload />} />
+                <Route path="/request-restaurant" element={<RestaurantRequest />} />
             </Route>
 
             <Route
