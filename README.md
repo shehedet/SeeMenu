@@ -73,14 +73,3 @@ SeeMenu prioritizes usability, readability, and accessibility.
 * Minimalist layouts with subtle brutalist and retro/vintage influences.
 * Straightforward navigation and practical search.
 * Responsive layouts without unnecessary visual effects or decorative clutter.
-
-## Author
-
-**A. K. M. Shahadat Hossain**
-
-* GitHub: [@shehedet](https://github.com/shehedet)
-* Repository: [github.com/shehedet/SeeMenu](https://github.com/shehedet/SeeMenu)
-
----
-
-SeeMenu is an actively developed project. The README distinguishes implemented functionality from planned features so the project's status remains transparent as development progresses.
