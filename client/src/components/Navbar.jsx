@@ -34,7 +34,7 @@ function Navbar({ searchQuery, onSearchChange }) {
     };
 
     return (
-        <header className="border-b-2 border-ink bg-paper">
+        <header className="sticky top-0 z-50 border-b-2 border-ink bg-paper">
             <nav className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-4 sm:px-6 lg:flex-nowrap lg:px-8">
                 <Link
                     to="/"
@@ -89,27 +89,32 @@ function Navbar({ searchQuery, onSearchChange }) {
 
                             {accountMenuOpen && (
                                 <div className="absolute right-0 top-full z-30 mt-2 w-64 border-2 border-ink bg-paper">
-                                    <div className="border-b border-line px-4 py-3">
-                                        <p className="truncate text-sm font-bold">
-                                            {profile?.username || "Your account"}
-                                        </p>
-                                        <p className="mt-1 break-all text-xs text-muted">
-                                            {user.email}
-                                        </p>
-                                        <p className="mt-2 text-xs text-muted">
-                                            Role: {profile?.role || "Loading..."}
-                                        </p>
-                                        {profile?.role === "contributor" && (
-                                            <Link
-                                                to="/request-restaurant"
+                                    {profile?.username && (
+                                        <Link
+                                            to={`/contributors/${encodeURIComponent(profile.username)}`}>
+                                            <button
+                                                type="button"
                                                 onClick={() => setAccountMenuOpen(false)}
-                                                className="block border-t border-line px-4 py-3 text-sm font-semibold hover:bg-mint"
+                                                className="w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold hover:bg-mint"
                                             >
-                                                Suggest a restaurant
-                                            </Link>
-                                        )}
-                                        
-                                    </div>
+                                                <p className="font-bold">
+                                                    {profile?.username || "Your account"}
+                                                </p>
+                                                <p className="mt-1 break-all text-xs text-muted">
+                                                    {user.email}
+                                                </p>
+                                                {profile?.role === "moderator" ? (
+                                                    <p className="mt-1 text-xs text-muted">
+                                                        Moderator
+                                                    </p>
+                                                    ) : profile?.role === "admin" ? (
+                                                    <p className="mt-1 text-xs text-muted">
+                                                        Admin
+                                                    </p>
+                                                    ) : null}
+                                            </button>
+                                        </Link>
+                                    )}
 
                                     <button
                                         type="button"
