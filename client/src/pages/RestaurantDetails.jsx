@@ -29,7 +29,7 @@ function RestaurantDetails() {
     const [menusError, setMenusError] = useState("");
     const [selectedImage, setSelectedImage] = useState(null);
 
-    const { user, loading: authLoading } = useAuth();
+    const { user, profile, loading: authLoading } = useAuth();
     const [reportingImage, setReportingImage] = useState(null);
     const [reportReason, setReportReason] = useState("");
     const [reportDetails, setReportDetails] = useState("");
@@ -559,6 +559,18 @@ function RestaurantDetails() {
                                     </a>
                                 )}
                             </div>
+                            
+                            {user && profile?.role === "contributor" && (
+                                <div className="mt-6">
+                                    <Link
+                                        to={`/upload-menu?restaurantId=${encodeURIComponent(id)}`}
+                                        className="inline-flex min-h-11 items-center justify-center gap-2 border-2 border-ink bg-mint px-5 py-3 text-sm font-bold hover:bg-teal"
+                                    >
+                                        <Utensils size={18} />
+                                        Upload Menu
+                                    </Link>
+                                </div>
+                            )}
                         </section>
 
 

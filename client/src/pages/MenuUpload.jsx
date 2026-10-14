@@ -1,6 +1,5 @@
-
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ImagePlus, Upload, X } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
@@ -8,7 +7,7 @@ import { supabase } from "../lib/supabase";
 
 const API_URL = "http://localhost:5000";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
-
+const MAX_FILES = 10;
 const ALLOWED_TYPES = {
     "image/jpeg": "jpg",
     "image/png": "png",
@@ -22,10 +21,14 @@ function MenuUpload() {
     const [restaurantsLoading, setRestaurantsLoading] = useState(true);
     const [restaurantError, setRestaurantError] = useState("");
 
-    const [restaurantId, setRestaurantId] = useState("");
+    const [searchParams] = useSearchParams();
+
+    const [restaurantId, setRestaurantId] = useState(
+        searchParams.get("restaurantId") || ""
+    );
     const [caption, setCaption] = useState("");
-    const [image, setImage] = useState(null);
-    const [previewUrl, setPreviewUrl] = useState("");
+    const [images, setImages] = useState([]);
+    const [previewUrls, setPreviewUrls] = useState([]);
 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
@@ -68,42 +71,252 @@ function MenuUpload() {
     }, []);
 
     // Create and clean up the local image preview URL.
+    // useEffect(() => {
+    //     if (!image) {
+    //         setPreviewUrl("");
+    //         return;
+    //     }
+
+    //     const objectUrl = URL.createObjectURL(image);
+    //     setPreviewUrl(objectUrl);
+
+    //     return () => URL.revokeObjectURL(objectUrl);
+    // }, [image]);
+
     useEffect(() => {
-        if (!image) {
-            setPreviewUrl("");
-            return;
-        }
+        const urls = images.map((image) => URL.createObjectURL(image));
 
-        const objectUrl = URL.createObjectURL(image);
-        setPreviewUrl(objectUrl);
+        setPreviewUrls(urls);
 
-        return () => URL.revokeObjectURL(objectUrl);
-    }, [image]);
+        return () => {
+            urls.forEach((url) => URL.revokeObjectURL(url));
+        };
+    }, [images]);
+
+
+    // function handleImageChange(event) {
+    //     const selectedFile = event.target.files?.[0];
+
+    //     setError("");
+    //     setSuccess("");
+    //     setImage(null);
+
+    //     if (!selectedFile) return;
+
+    //     if (!Object.hasOwn(ALLOWED_TYPES, selectedFile.type)) {
+    //         setError("Choose a JPG, PNG, or WebP image.");
+    //         event.target.value = "";
+    //         return;
+    //     }
+
+    //     if (selectedFile.size > MAX_FILE_SIZE) {
+    //         setError("The image must be 5 MB or smaller.");
+    //         event.target.value = "";
+    //         return;
+    //     }
+
+    //     setImage(selectedFile);
+    // }
 
     function handleImageChange(event) {
-        const selectedFile = event.target.files?.[0];
+        const selectedFiles = Array.from(event.target.files || []);
 
         setError("");
         setSuccess("");
-        setImage(null);
 
-        if (!selectedFile) return;
+        if (selectedFiles.length === 0) return;
 
-        if (!Object.hasOwn(ALLOWED_TYPES, selectedFile.type)) {
-            setError("Choose a JPG, PNG, or WebP image.");
+        if (selectedFiles.length > MAX_FILES) {
+            setError(`Choose no more than ${MAX_FILES} images per batch.`);
             event.target.value = "";
             return;
         }
 
-        if (selectedFile.size > MAX_FILE_SIZE) {
-            setError("The image must be 5 MB or smaller.");
+        const invalidType = selectedFiles.find(
+            (file) => !Object.hasOwn(ALLOWED_TYPES, file.type)
+        );
+
+        if (invalidType) {
+            setError("Every file must be a JPG, PNG, or WebP image.");
             event.target.value = "";
             return;
         }
 
-        setImage(selectedFile);
+        const oversizedFile = selectedFiles.find(
+            (file) => file.size > MAX_FILE_SIZE
+        );
+
+        if (oversizedFile) {
+            setError("Each image must be 5 MB or smaller.");
+            event.target.value = "";
+            return;
+        }
+
+        setImages((currentImages) => {
+            const combined = [...currentImages, ...selectedFiles];
+            const unique = combined.filter(
+                (file, index, array) =>
+                    array.findIndex(
+                        (candidate) =>
+                            candidate.name === file.name &&
+                            candidate.size === file.size &&
+                            candidate.lastModified === file.lastModified
+                    ) === index
+            );
+
+            if (unique.length > MAX_FILES) {
+                setError(`You can select up to ${MAX_FILES} images in total.`);
+                return currentImages;
+            }
+
+            return unique;
+        });
+
+        event.target.value = "";
     }
 
+
+    // async function handleSubmit(event) {
+    //     event.preventDefault();
+
+    //     setError("");
+    //     setSuccess("");
+
+    //     if (uploading) return;
+
+    //     if (!user || role !== "contributor") {
+    //         setError("Sign in with a contributor account to upload menu photos.");
+    //         return;
+    //     }
+
+    //     if (restaurantsLoading || restaurantError) {
+    //         setError("Wait until the restaurant list has loaded successfully.");
+    //         return;
+    //     }
+
+    //     // Confirm the restaurant exists in the approved list loaded by the API.
+    //     const selectedRestaurant = restaurants.find(
+    //         (restaurant) => restaurant.id === restaurantId
+    //     );
+
+    //     if (!selectedRestaurant) {
+    //         setError("Select a valid approved restaurant.");
+    //         return;
+    //     }
+
+    //     if (!image) {
+    //         setError("Choose a menu photo before submitting.");
+    //         return;
+    //     }
+
+    //     const extension = ALLOWED_TYPES[image.type];
+
+    //     if (!extension) {
+    //         setError("Choose a JPG, PNG, or WebP image.");
+    //         return;
+    //     }
+
+    //     if (image.size > MAX_FILE_SIZE) {
+    //         setError("The image must be 5 MB or smaller.");
+    //         return;
+    //     }
+
+    //     setUploading(true);
+
+    //     // Each upload gets a unique path inside the contributor's folder.
+    //     const filePath = `${user.id}/${crypto.randomUUID()}.${extension}`;
+
+    //     let storageUploadSucceeded = false;
+
+    //     try {
+    //         // 1. Upload the image file.
+    //         const { error: storageError } = await supabase.storage
+    //             .from("menu-images")
+    //             .upload(filePath, image, {
+    //                 contentType: image.type,
+    //                 cacheControl: "3600",
+    //                 upsert: false,
+    //             });
+
+    //         if (storageError) {
+    //             throw new Error(
+    //                 `Image upload failed: ${storageError.message}`
+    //             );
+    //         }
+
+    //         storageUploadSucceeded = true;
+
+    //         // 2. Get its URL. The public bucket allows direct image viewing.
+    //         const { data: publicUrlData } = supabase.storage
+    //             .from("menu-images")
+    //             .getPublicUrl(filePath);
+
+    //         const imageUrl = publicUrlData?.publicUrl;
+
+    //         if (!imageUrl) {
+    //             throw new Error("Could not generate the image URL.");
+    //         }
+
+    //         // 3. Create a pending submission in PostgreSQL.
+    //         const { error: databaseError } = await supabase
+    //             .from("menu_images")
+    //             .insert({
+    //                 restaurant_id: restaurantId,
+    //                 uploaded_by: user.id,
+    //                 image_url: imageUrl,
+    //                 caption: caption.trim() || null,
+    //                 status: "approved",
+    //             });
+
+    //         if (databaseError) {
+    //             throw new Error(
+    //                 `Could not save the submission: ${databaseError.message}`
+    //             );
+    //         }
+
+    //         // 4. Clear the form only after the database insert succeeds.
+    //         setSuccess(
+    //             "Menu photo submitted successfully! It is awaiting moderator review."
+    //         );
+
+    //         setRestaurantId("");
+    //         setCaption("");
+    //         setImage(null);
+
+    //         const fileInput = document.getElementById("menu-image");
+
+    //         if (fileInput) {
+    //             fileInput.value = "";
+    //         }
+    //     } catch (err) {
+    //         console.error("Menu image submission failed:", err);
+
+    //         if (storageUploadSucceeded) {
+    //             // The database insert may have failed after the file upload.
+    //             // Attempt cleanup, but don't grant broad delete permissions
+    //             // just to make this operation work.
+    //             const { error: cleanupError } = await supabase.storage
+    //                 .from("menu-images")
+    //                 .remove([filePath]);
+
+    //             if (cleanupError) {
+    //                 console.error(
+    //                     "Could not remove the uploaded file:",
+    //                     cleanupError.message
+    //                 );
+    //             }
+    //         }
+
+    //         setError(
+    //             err.message ||
+    //                 "Something went wrong while submitting the menu photo."
+    //         );
+    //     } finally {
+    //         setUploading(false);
+    //     }
+    // }
+
+    
     async function handleSubmit(event) {
         event.preventDefault();
 
@@ -112,8 +325,10 @@ function MenuUpload() {
 
         if (uploading) return;
 
-        if (!user || role !== "contributor") {
-            setError("Sign in with a contributor account to upload menu photos.");
+        const allowedRoles = ["contributor", "moderator", "admin"];
+
+        if (!user || !allowedRoles.includes(role)) {
+            setError("You do not have permission to upload menu photos.");
             return;
         }
 
@@ -122,7 +337,6 @@ function MenuUpload() {
             return;
         }
 
-        // Confirm the restaurant exists in the approved list loaded by the API.
         const selectedRestaurant = restaurants.find(
             (restaurant) => restaurant.id === restaurantId
         );
@@ -132,104 +346,119 @@ function MenuUpload() {
             return;
         }
 
-        if (!image) {
-            setError("Choose a menu photo before submitting.");
+        if (images.length === 0) {
+            setError("Choose at least one menu photo.");
             return;
         }
 
-        const extension = ALLOWED_TYPES[image.type];
-
-        if (!extension) {
-            setError("Choose a JPG, PNG, or WebP image.");
+        if (images.length > MAX_FILES) {
+            setError(`You can upload up to ${MAX_FILES} images per batch.`);
             return;
         }
 
-        if (image.size > MAX_FILE_SIZE) {
-            setError("The image must be 5 MB or smaller.");
-            return;
+        for (const image of images) {
+            if (!Object.hasOwn(ALLOWED_TYPES, image.type)) {
+                setError("Every file must be a JPG, PNG, or WebP image.");
+                return;
+            }
+
+            if (image.size > MAX_FILE_SIZE) {
+                setError("Each image must be 5 MB or smaller.");
+                return;
+            }
         }
 
         setUploading(true);
 
-        // Each upload gets a unique path inside the contributor's folder.
-        const filePath = `${user.id}/${crypto.randomUUID()}.${extension}`;
-
-        let storageUploadSucceeded = false;
+        // Track every file uploaded so we can clean up if the batch fails.
+        const uploadedPaths = [];
 
         try {
-            // 1. Upload the image file.
-            const { error: storageError } = await supabase.storage
-                .from("menu-images")
-                .upload(filePath, image, {
-                    contentType: image.type,
-                    cacheControl: "3600",
-                    upsert: false,
-                });
+            const menuImageRows = [];
 
-            if (storageError) {
-                throw new Error(
-                    `Image upload failed: ${storageError.message}`
-                );
-            }
+            // 1. Upload each image to Supabase Storage.
+            for (const image of images) {
+                const extension = ALLOWED_TYPES[image.type];
+                const filePath =
+                    `${user.id}/${crypto.randomUUID()}.${extension}`;
 
-            storageUploadSucceeded = true;
+                const { error: storageError } = await supabase.storage
+                    .from("menu-images")
+                    .upload(filePath, image, {
+                        contentType: image.type,
+                        cacheControl: "3600",
+                        upsert: false,
+                    });
 
-            // 2. Get its URL. The public bucket allows direct image viewing.
-            const { data: publicUrlData } = supabase.storage
-                .from("menu-images")
-                .getPublicUrl(filePath);
+                if (storageError) {
+                    throw new Error(
+                        `Failed to upload "${image.name}": ${storageError.message}`
+                    );
+                }
 
-            const imageUrl = publicUrlData?.publicUrl;
+                uploadedPaths.push(filePath);
 
-            if (!imageUrl) {
-                throw new Error("Could not generate the image URL.");
-            }
+                // 2. Get the public URL for this image.
+                const { data: publicUrlData } = supabase.storage
+                    .from("menu-images")
+                    .getPublicUrl(filePath);
 
-            // 3. Create a pending submission in PostgreSQL.
-            const { error: databaseError } = await supabase
-                .from("menu_images")
-                .insert({
+                const imageUrl = publicUrlData?.publicUrl;
+
+                if (!imageUrl) {
+                    throw new Error(
+                        `Could not generate a URL for "${image.name}".`
+                    );
+                }
+
+                // Prepare one database row per image.
+                menuImageRows.push({
                     restaurant_id: restaurantId,
                     uploaded_by: user.id,
                     image_url: imageUrl,
                     caption: caption.trim() || null,
                     status: "approved",
                 });
+            }
+
+            // 3. Insert all image records in one database operation.
+            const { error: databaseError } = await supabase
+                .from("menu_images")
+                .insert(menuImageRows);
 
             if (databaseError) {
                 throw new Error(
-                    `Could not save the submission: ${databaseError.message}`
+                    `Could not save the menu images: ${databaseError.message}`
                 );
             }
 
-            // 4. Clear the form only after the database insert succeeds.
+            // 4. Reset the image selection but keep the restaurant selected.
             setSuccess(
-                "Menu photo submitted successfully! It is awaiting moderator review."
+                `Successfully uploaded ${images.length} menu ${
+                    images.length === 1 ? "image" : "images"
+                }.`
             );
 
-            setRestaurantId("");
+            setImages([]);
             setCaption("");
-            setImage(null);
 
-            const fileInput = document.getElementById("menu-image");
+            const fileInput = document.getElementById("menu-images");
 
             if (fileInput) {
                 fileInput.value = "";
             }
         } catch (err) {
-            console.error("Menu image submission failed:", err);
+            console.error("Menu image batch submission failed:", err);
 
-            if (storageUploadSucceeded) {
-                // The database insert may have failed after the file upload.
-                // Attempt cleanup, but don't grant broad delete permissions
-                // just to make this operation work.
+            // Remove files uploaded by this batch if something failed.
+            if (uploadedPaths.length > 0) {
                 const { error: cleanupError } = await supabase.storage
                     .from("menu-images")
-                    .remove([filePath]);
+                    .remove(uploadedPaths);
 
                 if (cleanupError) {
                     console.error(
-                        "Could not remove the uploaded file:",
+                        "Could not clean up uploaded files:",
                         cleanupError.message
                     );
                 }
@@ -237,18 +466,21 @@ function MenuUpload() {
 
             setError(
                 err.message ||
-                    "Something went wrong while submitting the menu photo."
+                    "Something went wrong while uploading the menu images."
             );
         } finally {
             setUploading(false);
         }
     }
 
+
+
     if (authLoading) {
         return <p className="p-6 text-ink">Checking authentication...</p>;
     }
 
-    if (!user || role !== "contributor") {
+    // if (!user || role !== "contributor") {
+    if (!user || !["contributor", "moderator", "admin"].includes(role)) {
         return (
             <div className="min-h-screen bg-paper text-ink">
                 <Navbar />
@@ -259,7 +491,7 @@ function MenuUpload() {
                     </h1>
 
                     <p className="mt-3 text-muted">
-                        Sign in with a contributor account to upload menu photos.
+                        Sign in to upload menu photos.
                     </p>
 
                     <Link
@@ -360,7 +592,7 @@ function MenuUpload() {
                             )}
                     </div>
 
-                    <div>
+                    {/* <div>
                         <label
                             htmlFor="menu-image"
                             className="mb-2 block text-sm font-semibold"
@@ -435,7 +667,100 @@ function MenuUpload() {
                                 </span>
                             </label>
                         )}
+                    </div> */}
+                    
+                    <div>
+                        <label
+                            htmlFor="menu-images"
+                            className="mb-2 block text-sm font-semibold"
+                        >
+                            Menu photos
+                        </label>
+
+                        <p className="mb-3 text-sm text-muted">
+                            Select up to 10 images. JPG, PNG, or WebP (Max 5 MB per image).
+                        </p>
+
+                        <input
+                            id="menu-images"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            multiple
+                            onChange={handleImageChange}
+                            disabled={uploading || images.length >= MAX_FILES}
+                            className="sr-only"
+                        />
+
+                        <label
+                            htmlFor="menu-images"
+                            className={`flex flex-col items-center justify-center border border-dashed border-line bg-white px-5 py-8 text-center hover:bg-mint/20 ${
+                                uploading || images.length >= MAX_FILES
+                                    ? "cursor-not-allowed opacity-50"
+                                    : "cursor-pointer"
+                            }`}
+                        >
+                            <ImagePlus size={32} />
+
+                            <span className="mt-3 font-semibold">
+                                Choose menu photos
+                            </span>
+
+                            <span className="mt-1 text-sm text-muted">
+                                {images.length} of {MAX_FILES} images selected
+                            </span>
+                        </label>
+
+                        {images.length > 0 && (
+                            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                {images.map((image, index) => (
+                                    <div
+                                        key={`${image.name}-${image.size}-${image.lastModified}`}
+                                        className="min-w-0 border border-line p-3"
+                                    >
+                                        <div className="mb-3 flex items-start justify-between gap-2">
+                                            <span className="break-all text-sm">
+                                                {image.name}
+                                            </span>
+
+                                            <button
+                                                type="button"
+                                                disabled={uploading}
+                                                onClick={() => {
+                                                    setImages((currentImages) =>
+                                                        currentImages.filter(
+                                                            (_, imageIndex) =>
+                                                                imageIndex !== index
+                                                        )
+                                                    );
+                                                    setError("");
+                                                    setSuccess("");
+                                                }}
+                                                className="shrink-0 p-2 hover:bg-pink disabled:opacity-50"
+                                                aria-label={`Remove ${image.name}`}
+                                            >
+                                                <X size={18} />
+                                            </button>
+                                        </div>
+
+                                        <img
+                                            src={previewUrls[index]}
+                                            alt={`Preview of ${image.name}`}
+                                            className="h-48 w-full object-contain"
+                                        />
+
+                                        <p className="mt-2 text-xs text-muted">
+                                            {(image.size / (1024 * 1024)).toFixed(2)} MB
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
+
+
+
+
+
 
                     <div>
                         <label
@@ -486,7 +811,7 @@ function MenuUpload() {
                         </p>
                     )}
 
-                    <button
+                    {/* <button
                         type="submit"
                         disabled={
                             uploading ||
@@ -500,7 +825,33 @@ function MenuUpload() {
                     >
                         <Upload size={18} />
                         {uploading ? "Uploading..." : "Submit menu photo"}
+                    </button> */}
+
+                    
+                    <button
+                        type="submit"
+                        disabled={
+                            uploading ||
+                            !restaurantId ||
+                            images.length === 0 ||
+                            restaurantsLoading ||
+                            Boolean(restaurantError) ||
+                            restaurants.length === 0
+                        }
+                        className="inline-flex items-center justify-center gap-2 bg-ink px-6 py-3 font-semibold text-white hover:bg-ink/80 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        <Upload size={18} />
+                        {uploading
+                            ? `Uploading ${images.length} ${
+                                images.length === 1 ? "image" : "images"
+                            }...`
+                            : `Upload ${images.length || ""} ${
+                                images.length === 1 ? "image" : "images"
+                            }`.trim()}
                     </button>
+
+
+
                 </form>
             </main>
         </div>

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, Search, Utensils } from "lucide-react";
-
+import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import RestaurantCard from "../components/RestaurantCard";
 
 
 function Home() {
+    const { user, profile } = useAuth();
 
     const [searchQuery, setSearchQuery] = useState("");
     const [restaurants, setRestaurants] = useState([]);
@@ -99,7 +101,7 @@ function Home() {
                             menus shared by the people who visit them.
                         </p>
 
-                        <form
+                        {/* <form
                             role="search"
                             className="mt-8 flex max-w-2xl items-center border-2 border-ink bg-white p-1"
                             onSubmit={(event) => event.preventDefault()}
@@ -130,7 +132,47 @@ function Home() {
 
                         <p className="mt-3 text-sm text-muted">
                             Search by restaurant, food type, or area.
+                        </p> */}
+                        
+                        <div className="mt-8 flex max-w-4xl flex-col items-stretch gap-3 sm:flex-row sm:items-stretch">
+                            <form
+                                role="search"
+                                className="flex min-w-0 flex-1 items-center border-2 border-ink bg-white p-1"
+                                onSubmit={(event) => event.preventDefault()}
+                            >
+                                <Search size={20} className="ml-3 shrink-0" />
+
+                                <input
+                                    type="search"
+                                    value={searchQuery}
+                                    onChange={(event) => setSearchQuery(event.target.value)}
+                                    placeholder="Try biryani, Dhanmondi, or a restaurant..."
+                                    aria-label="Search food places"
+                                    className="min-w-0 flex-1 bg-transparent px-3 py-3 outline-none placeholder:text-muted"
+                                />
+
+                                <button
+                                    type="submit"
+                                    className="border-l-2 border-ink bg-mint px-4 py-3 text-sm font-bold hover:bg-teal sm:px-6"
+                                >
+                                    Search
+                                </button>
+                            </form>
+
+                            {user && profile?.role === "contributor" && (
+                                <Link
+                                    to="/request-restaurant"
+                                    className="flex shrink-0 items-center justify-center border-2 border-ink bg-pink px-5 py-3 text-sm font-bold hover:bg-mint"
+                                >
+                                    + Suggest a Restaurant
+                                </Link>
+                            )}
+                        </div>
+
+                        <p className="mt-3 text-sm text-muted">
+                            Search by restaurant, food type, or area.
                         </p>
+
                     </div>
                 </section>
 

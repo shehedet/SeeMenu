@@ -41,10 +41,21 @@ function App() {
                 />
             </Route>
 
-            <Route element={<ProtectedRoute allowedRoles={["contributor"]} />}>
+            
+            <Route
+                element={
+                    <ProtectedRoute
+                        allowedRoles={["contributor", "moderator", "admin"]}
+                    />
+                }   
+            >
                 <Route path="/upload-menu" element={<MenuUpload />} />
+            </Route>
+
+            <Route element={<ProtectedRoute allowedRoles={["contributor"]} />}>
                 <Route path="/request-restaurant" element={<RestaurantRequest />} />
             </Route>
+
 
             <Route
                 element={
