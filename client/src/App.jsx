@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import RestaurantDetails from "./pages/RestaurantDetails";
-
+import EditProfile from "./pages/EditProfile";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -54,6 +54,18 @@ function App() {
 
             <Route element={<ProtectedRoute allowedRoles={["contributor"]} />}>
                 <Route path="/request-restaurant" element={<RestaurantRequest />} />
+            </Route>
+
+
+            <Route
+                path="/edit-profile"
+                element={
+                    <ProtectedRoute
+                        allowedRoles={["contributor", "moderator", "admin"]}
+                    />
+                }
+                >
+                <Route path="" element={<EditProfile />} />
             </Route>
 
 

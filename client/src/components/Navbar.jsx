@@ -6,6 +6,7 @@ import {
     UtensilsCrossed,
     ChevronDown,
     LogOut,
+    LayoutDashboard,
 } from "lucide-react";
 
 import { useAuth } from "../context/AuthContext";
@@ -95,7 +96,7 @@ function Navbar({ searchQuery, onSearchChange }) {
                                             <button
                                                 type="button"
                                                 onClick={() => setAccountMenuOpen(false)}
-                                                className="w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold hover:bg-mint"
+                                                className="w-full border-b border-line items-center gap-2 px-4 py-3 text-left text-sm font-semibold hover:bg-mint"
                                             >
                                                 <p className="font-bold">
                                                     {profile?.username || "Your account"}
@@ -115,6 +116,25 @@ function Navbar({ searchQuery, onSearchChange }) {
                                             </button>
                                         </Link>
                                     )}
+
+
+                                    
+                                    {["moderator", "admin"].includes(profile?.role) && (
+                                        <Link
+                                            to={
+                                                profile.role === "admin"
+                                                    ? "/admin-test"
+                                                    : "/moderator-test"
+                                            }
+                                            onClick={() => setAccountMenuOpen(false)}
+                                            className="flex w-full items-center gap-2 border-b border-line px-4 py-3 text-left text-sm font-semibold hover:bg-mint"
+                                        >
+                                            <LayoutDashboard size={16} />
+                                            Dashboard
+                                        </Link>
+                                    )}
+
+
 
                                     <button
                                         type="button"

@@ -200,7 +200,7 @@ function ContributorProfile() {
                         role="alert"
                     >
                         <h1 className="text-2xl font-bold">
-                            Unable to open profile
+                            Unable to open profile. If you are a moderator/admin, you will not see your profile yet.
                         </h1>
                         <p className="mt-3 text-muted">{pageError}</p>
                     </section>
@@ -220,13 +220,23 @@ function ContributorProfile() {
                                     {contributor.username}
                                 </h1>
 
-                                <p className="mt-2 text-sm text-muted">
-                                    Member since{" "}
-                                    {contributor.created_at
-                                        ? new Date(
-                                              contributor.created_at
-                                          ).toLocaleDateString()
-                                        : "Unknown"}
+                                <p className="mt-2">
+                                    <p className="inline-flex border-r mr-3 pr-3 text-sm text-muted">
+                                        Member since{" "}
+                                        {contributor.created_at
+                                            ? new Date(
+                                                contributor.created_at
+                                            ).toLocaleDateString()
+                                            : "Unknown"}
+                                    </p>
+                                    <p className="inline-flex items-center font-semibold text-sm text-muted hover:text-teal">
+                                        <Link
+                                            to="/edit-profile"
+                                            onClick={() => setAccountMenuOpen(false)}
+                                        >
+                                            Edit profile
+                                        </Link>
+                                    </p>
                                 </p>
                             </div>
                         </div>
