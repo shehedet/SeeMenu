@@ -198,7 +198,7 @@ function ContributorProfile() {
                     <section
                         className="border-y border-line py-12"
                         role="alert"
-                    >
+                    >   
                         <h1 className="text-2xl font-bold">
                             Unable to open profile. If you are a moderator/admin, you will not see your profile yet.
                         </h1>
