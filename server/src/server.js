@@ -7,7 +7,27 @@ import { supabase } from "./lib/supabase.js";
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+
+
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    "http://localhost:5173",
+].filter(Boolean);
+
+app.use(
+    cors({
+        origin(origin, callback) {
+            if (!origin || allowedOrigins.includes(origin)) {
+                return callback(null, true);
+            }
+
+            return callback(new Error("Origin not allowed by CORS"));
+        },
+    })
+);
+
+
+
 app.use(express.json());
 
 // Check whether the API is running.
