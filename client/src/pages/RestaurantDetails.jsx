@@ -66,7 +66,7 @@ function RestaurantDetails() {
                     { signal: controller.signal }
                 );
 
-                
+
                 const result = await response.json();
 
                 if (!response.ok) {
@@ -102,6 +102,9 @@ function RestaurantDetails() {
             try {
                 setIsMenusLoading(true);
                 setMenusError("");
+
+                const API_URL =
+                    import.meta.env.VITE_API_URL || "http://localhost:5000";
 
                 const response = await fetch(
                     `${API_URL}/api/restaurants/${id}/menus`,
