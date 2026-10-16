@@ -46,6 +46,7 @@ function Signup() {
                 email: formData.email.trim(),
                 password: formData.password,
                 options: {
+                    emailRedirectTo: window.location.origin,
                     data: {
                         username: formData.username.trim(),
                         phone: formData.phone.trim(),

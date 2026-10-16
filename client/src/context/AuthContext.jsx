@@ -16,7 +16,7 @@ export function AuthProvider({ children }) {
     const fetchProfile = async (userId) => {
         const { data, error } = await supabase
             .from("profiles")
-            .select("id, username, phone, role, avatar_url")
+            .select("id, username, full_name, phone, role, avatar_url")
             .eq("id", userId)
             .single();
 
@@ -28,6 +28,14 @@ export function AuthProvider({ children }) {
 
         setProfile(data);
     };
+
+
+    const refreshProfile = async () => {
+        if (!session?.user) return;
+
+        await fetchProfile(session.user.id);
+    };
+
 
     useEffect(() => {
         let isMounted = true;
@@ -101,7 +109,8 @@ export function AuthProvider({ children }) {
                 profile,
                 role: profile?.role ?? null,
                 loading,
-                signOut
+                signOut,
+                refreshProfile,
             }}
         >
             {children}

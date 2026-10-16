@@ -8,7 +8,7 @@ import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 
 function EditProfile() {
-    const { user, profile } = useAuth();
+    const { user, profile, refreshProfile } = useAuth();
 
     const [fullName, setFullName] = useState("");
     const [phone, setPhone] = useState("");
@@ -18,7 +18,12 @@ function EditProfile() {
     const [success, setSuccess] = useState("");
 
     useEffect(() => {
-        if (!user || !profile) return;
+        if (!user) {
+            setLoading(false);
+            return;
+        }
+
+        if (!profile) return;
 
         setFullName(profile.full_name || "");
         setPhone(profile.phone || "");
@@ -37,7 +42,6 @@ function EditProfile() {
             .update({
                 full_name: fullName.trim() || null,
                 phone: phone.trim() || null,
-                updated_at: new Date().toISOString(),
             })
             .eq("id", user.id);
 
@@ -49,6 +53,7 @@ function EditProfile() {
             return;
         }
 
+        await refreshProfile();
         setSuccess("Your profile has been updated.");
 
         // Refresh the auth context's profile data if it exposes
