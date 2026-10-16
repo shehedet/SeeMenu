@@ -4,7 +4,6 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import RestaurantCard from "../components/RestaurantCard";
-import MenuUpload from "MenuUpload";
 
 
 function Home() {
@@ -23,10 +22,15 @@ function Home() {
                 setIsLoading(true);
                 setError("");
 
+                
+                const API_URL =
+                    import.meta.env.VITE_API_URL || "http://localhost:5000";
+
                 const response = await fetch(
                     `${API_URL}/api/restaurants`,
                     { signal: controller.signal }
                 );
+
 
                 if (!response.ok) {
                     throw new Error("Unable to load restaurants.");

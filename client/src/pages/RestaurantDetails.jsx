@@ -12,7 +12,6 @@ import {
     ThumbsUp,
     ThumbsDown,
 } from "lucide-react";
-import MenuUpload from "MenuUpload";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
@@ -58,11 +57,16 @@ function RestaurantDetails() {
                 setError("");
                 setRestaurant(null);
 
+                
+                const API_URL =
+                    import.meta.env.VITE_API_URL || "http://localhost:5000";
+
                 const response = await fetch(
                     `${API_URL}/api/restaurants/${id}`,
                     { signal: controller.signal }
                 );
 
+                
                 const result = await response.json();
 
                 if (!response.ok) {
