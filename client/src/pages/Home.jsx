@@ -101,39 +101,8 @@ function Home() {
                             menus shared by the people who visit them.
                         </p>
 
-                        {/* <form
-                            role="search"
-                            className="mt-8 flex max-w-2xl items-center border-2 border-ink bg-white p-1"
-                            onSubmit={(event) => event.preventDefault()}
-                        >
-                            <Search
-                                size={20}
-                                className="ml-3 shrink-0"
-                            />
 
-                            <input
-                                type="search"
-                                value={searchQuery}
-                                onChange={(event) =>
-                                    setSearchQuery(event.target.value)
-                                }
-                                placeholder="Try biryani, Dhanmondi, or a restaurant..."
-                                aria-label="Search food places"
-                                className="min-w-0 flex-1 bg-transparent px-3 py-3 outline-none placeholder:text-muted"
-                            />
 
-                            <button
-                                type="submit"
-                                className="border-l-2 border-ink bg-mint px-4 py-3 text-sm font-bold hover:bg-teal sm:px-6"
-                            >
-                                Search
-                            </button>
-                        </form>
-
-                        <p className="mt-3 text-sm text-muted">
-                            Search by restaurant, food type, or area.
-                        </p> */}
-                        
                         <div className="mt-8 flex max-w-4xl flex-col items-stretch gap-3 sm:flex-row sm:items-stretch">
                             <form
                                 role="search"
