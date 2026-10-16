@@ -12,7 +12,7 @@ import {
     ThumbsUp,
     ThumbsDown,
 } from "lucide-react";
-
+import MenuUpload from "MenuUpload";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
@@ -59,7 +59,7 @@ function RestaurantDetails() {
                 setRestaurant(null);
 
                 const response = await fetch(
-                    `http://localhost:5000/api/restaurants/${id}`,
+                    `${API_URL}/api/restaurants/${id}`,
                     { signal: controller.signal }
                 );
 
@@ -100,7 +100,7 @@ function RestaurantDetails() {
                 setMenusError("");
 
                 const response = await fetch(
-                    `http://localhost:5000/api/restaurants/${id}/menus`,
+                    `${API_URL}/api/restaurants/${id}/menus`,
                     { signal: controller.signal }
                 );
 

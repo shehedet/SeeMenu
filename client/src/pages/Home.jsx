@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import RestaurantCard from "../components/RestaurantCard";
+import MenuUpload from "MenuUpload";
 
 
 function Home() {
@@ -23,7 +24,7 @@ function Home() {
                 setError("");
 
                 const response = await fetch(
-                    "http://localhost:5000/api/restaurants",
+                    `${API_URL}/api/restaurants`,
                     { signal: controller.signal }
                 );
 
