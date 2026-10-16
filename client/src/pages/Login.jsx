@@ -55,11 +55,15 @@ function Login() {
         setMessage("");
         setLoading(true);
 
-        try {
-            const { error } = await supabase.auth.signInWithOAuth({
+        try {            
+                const redirectUrl = import.meta.env.DEV
+                ? window.location.origin
+                : "https://YOUR-VERCEL-DOMAIN.vercel.app";
+
+                const { error } = await supabase.auth.signInWithOAuth({
                 provider: "google",
                 options: {
-                    redirectTo: `${window.location.origin}/`,
+                    redirectTo: redirectUrl,
                 },
             });
 
