@@ -1,4 +1,4 @@
-# SeeMenu
+# SeeMenu: A Community-driven Restaurant and Food Menu Discovery Platform (WIP)
 
 **SeeMenu is a community-driven restaurant and food menu discovery platform designed for Bangladesh.**
 
