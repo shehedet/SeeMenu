@@ -232,7 +232,7 @@ function ContributorProfile() {
                                     <p className="inline-flex items-center font-semibold text-sm text-muted hover:text-teal">
                                         <Link
                                             to="/edit-profile"
-                                            onClick={() => setAccountMenuOpen(false)}
+                                            // onClick={() => setAccountMenuOpen(false)}
                                         >
                                             Edit profile
                                         </Link>

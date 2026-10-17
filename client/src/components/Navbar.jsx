@@ -34,6 +34,18 @@ function Navbar({ searchQuery, onSearchChange }) {
         navigate("/");
     };
 
+
+    const profilePath = profile?.username
+        ? `/${
+            profile.role === "moderator"
+                ? "moderators"
+                : profile.role === "admin"
+                ? "admins"
+                : "contributors"
+            }/${encodeURIComponent(profile.username)}`
+        : null;
+
+
     return (
         <header className="sticky top-0 z-50 border-b-2 border-ink bg-paper">
             <nav className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-4 sm:px-6 lg:flex-nowrap lg:px-8">
@@ -90,7 +102,7 @@ function Navbar({ searchQuery, onSearchChange }) {
 
                             {accountMenuOpen && (
                                 <div className="absolute right-0 top-full z-30 mt-2 w-64 border-2 border-ink bg-paper">
-                                    {profile?.username && (
+                                    {/* {profile?.username && (
                                         <Link
                                             to={`/contributors/${encodeURIComponent(profile.username)}`}>
                                             <button
@@ -115,7 +127,27 @@ function Navbar({ searchQuery, onSearchChange }) {
                                                     ) : null}
                                             </button>
                                         </Link>
-                                    )}
+                                    )} */}
+
+
+
+                                    {profilePath && (
+                                        <Link
+                                            to={profilePath}
+                                            onClick={() => setAccountMenuOpen(false)}
+                                            className="block w-full border-b border-line px-4 py-3 text-left text-sm hover:bg-mint"
+                                        >
+                                            <p className="font-bold">{profile.username}</p>
+                                            <p className="mt-1 break-all text-xs text-muted">{user.email}</p>
+                                            <p className="mt-1 text-xs text-muted">
+                                            {profile.role === "admin"
+                                                ? "Admin"
+                                                : profile.role === "moderator"
+                                                ? "Moderator"
+                                                : "Contributor"}
+                                            </p>
+                                        </Link>
+                                        )}
 
 
                                     

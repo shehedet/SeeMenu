@@ -21,7 +21,7 @@ function App() {
             <Route path="/signup" element={<Signup />} />
             <Route path="/restaurants/:id" element={<RestaurantDetails />} />
 
-            <Route path="/contributors/:username" element={<ContributorProfile />} />
+            {/* <Route path="/contributors/:username" element={<ContributorProfile />} /> */}
 
 
             <Route
@@ -66,6 +66,12 @@ function App() {
             >
                 <Route path="/edit-profile" element={<EditProfile />} />
             </Route>
+
+
+            <Route path="/contributors/:username" element={<ContributorProfile />} />
+            <Route path="/moderators/:username" element={<ContributorProfile />} />
+            <Route path="/admins/:username" element={<ContributorProfile />} />
+
 
 
             <Route
