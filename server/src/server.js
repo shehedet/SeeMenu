@@ -3,6 +3,8 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { supabase } from "./lib/supabase.js";
+import { supabaseAdmin } from "./lib/supabaseAdmin.js";
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -164,6 +166,95 @@ app.get("/api/restaurants/:id/menus", async (req, res) => {
         });
     }
 });
+
+
+app.delete("/api/account", async (req, res) => {
+    try {
+        const authorization = req.headers.authorization;
+
+        if (!authorization?.startsWith("Bearer ")) {
+            return res.status(401).json({
+                error: "Authentication is required.",
+            });
+        }
+
+        const accessToken = authorization.slice("Bearer ".length);
+
+        // Verify the access token with Supabase Auth.
+        const { data: authData, error: authError } =
+            await supabase.auth.getUser(accessToken);
+
+        if (authError || !authData.user) {
+            return res.status(401).json({
+                error: "Your session is invalid or expired. Please sign in again.",
+            });
+        }
+
+        const userId = authData.user.id;
+
+        // Only contributors and moderators may use this feature.
+        // The role is read from the database, never from the request body.
+        const { data: profile, error: profileError } = await supabaseAdmin
+            .from("profiles")
+            .select("id, role")
+            .eq("id", userId)
+            .maybeSingle();
+
+        if (profileError) {
+            console.error("Failed to check deletion eligibility:", profileError.message);
+
+            return res.status(500).json({
+                error: "Unable to verify account permissions.",
+            });
+        }
+
+        if (profile && !["contributor", "moderator"].includes(profile.role)) {
+            return res.status(403).json({
+                error: "Account deletion is unavailable for this role.",
+            });
+        }
+
+        // Remove the profile and anonymize linked content through FK rules.
+        // This is safe to retry if the profile has already been removed.
+        const { error: cleanupError } = await supabaseAdmin.rpc(
+            "delete_own_profile_data",
+            { p_user_id: userId }
+        );
+
+        if (cleanupError) {
+            console.error("Failed to clean up profile:", cleanupError.message);
+
+            return res.status(500).json({
+                error: "Unable to prepare the account for deletion. Please try again.",
+            });
+        }
+
+        // Delete the authenticated account using the trusted Admin API.
+        const { error: deleteError } =
+            await supabaseAdmin.auth.admin.deleteUser(userId);
+
+        if (deleteError) {
+            console.error("Failed to delete Auth user:", deleteError.message);
+
+            return res.status(500).json({
+                error:
+                    "Profile data was removed, but account deletion did not finish. Please retry or contact support.",
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: "Your account has been deleted.",
+        });
+    } catch (error) {
+        console.error("Unexpected account deletion error:", error);
+
+        return res.status(500).json({
+            error: "An unexpected error occurred while deleting your account.",
+        });
+    }
+});
+
 
 app.listen(PORT, () => {
     console.log(`SeeMenu server running on http://localhost:${PORT}`);
