@@ -29,6 +29,16 @@ function RestaurantDetails() {
     const [selectedImage, setSelectedImage] = useState(null);
 
     const { user, profile, loading: authLoading } = useAuth();
+    
+    const canEditCover =
+        user && ["moderator", "admin"].includes(profile?.role);
+
+    const [coverFile, setCoverFile] = useState(null);
+    const [coverPreview, setCoverPreview] = useState("");
+    const [coverSubmitting, setCoverSubmitting] = useState(false);
+    const [coverError, setCoverError] = useState("");
+    const [coverSuccess, setCoverSuccess] = useState("");
+
     const [reportingImage, setReportingImage] = useState(null);
     const [reportReason, setReportReason] = useState("");
     const [reportDetails, setReportDetails] = useState("");
@@ -228,6 +238,135 @@ function RestaurantDetails() {
             setReportSubmitting(false);
         }
     };
+
+
+
+    const handleCoverFileChange = (event) => {
+        const file = event.target.files?.[0];
+
+        setCoverError("");
+        setCoverSuccess("");
+        setCoverFile(null);
+        setCoverPreview("");
+
+        if (!file) return;
+
+        const allowedTypes = [
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+        ];
+
+        if (!allowedTypes.includes(file.type)) {
+            setCoverError("Choose a JPEG, PNG, or WebP image.");
+            event.target.value = "";
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            setCoverError("The image must be 5 MB or smaller.");
+            event.target.value = "";
+            return;
+        }
+
+        setCoverFile(file);
+        setCoverPreview(URL.createObjectURL(file));
+    };
+
+    const handleCoverUpload = async (event) => {
+        event.preventDefault();
+
+        if (!user || !canEditCover) {
+            setCoverError(
+                "Only moderators and admins can change restaurant covers."
+            );
+            return;
+        }
+
+        if (!coverFile || !restaurant?.id) {
+            setCoverError("Choose an image before saving.");
+            return;
+        }
+
+        if (coverSubmitting) return;
+
+        setCoverSubmitting(true);
+        setCoverError("");
+        setCoverSuccess("");
+
+        let uploadedPath = "";
+
+        try {
+            const extensionByType = {
+                "image/jpeg": "jpg",
+                "image/png": "png",
+                "image/webp": "webp",
+            };
+
+            const extension = extensionByType[coverFile.type];
+
+            // A unique path prevents overwriting a cached cover image.
+            uploadedPath =
+                `${restaurant.id}/${crypto.randomUUID()}.${extension}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from("restaurant-covers")
+                .upload(uploadedPath, coverFile, {
+                    contentType: coverFile.type,
+                    upsert: false,
+                });
+
+            if (uploadError) throw uploadError;
+
+            const { data: publicUrlData } = supabase.storage
+                .from("restaurant-covers")
+                .getPublicUrl(uploadedPath);
+
+            const coverUrl = publicUrlData.publicUrl;
+
+            const { data: updatedRestaurant, error: updateError } =
+                await supabase
+                    .from("restaurants")
+                    .update({ cover_image_url: coverUrl })
+                    .eq("id", restaurant.id)
+                    .select()
+                    .single();
+
+            if (updateError) throw updateError;
+
+            setRestaurant(updatedRestaurant);
+            setCoverFile(null);
+            setCoverPreview("");
+            setCoverSuccess("Restaurant cover updated successfully.");
+
+            const input = document.getElementById("restaurant-cover-file");
+            if (input) input.value = "";
+        } catch (err) {
+            console.error("Error updating restaurant cover:", err);
+
+            // Remove the new upload if saving the restaurant record failed.
+            if (uploadedPath) {
+                const { error: cleanupError } = await supabase.storage
+                    .from("restaurant-covers")
+                    .remove([uploadedPath]);
+
+                if (cleanupError) {
+                    console.error(
+                        "Could not remove the unused cover image:",
+                        cleanupError
+                    );
+                }
+            }
+
+            setCoverError(
+                err.message || "Unable to update the restaurant cover."
+            );
+        } finally {
+            setCoverSubmitting(false);
+        }
+    };
+
+
 
 
 
@@ -527,6 +666,66 @@ function RestaurantDetails() {
                                     />
                                 </div>
                             )}
+
+
+                            
+                            {user && canEditCover && (
+                                <form
+                                    onSubmit={handleCoverUpload}
+                                    className="mb-8 border-y border-line py-4"
+                                >
+                                    <label
+                                        htmlFor="restaurant-cover-file"
+                                        className="block text-sm font-semibold"
+                                    >
+                                        Edit restaurant cover
+                                    </label>
+
+                                    <input
+                                        id="restaurant-cover-file"
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        onChange={handleCoverFileChange}
+                                        disabled={coverSubmitting}
+                                        className="mt-2 block w-full text-sm"
+                                    />
+
+                                    {coverPreview && (
+                                        <img
+                                            src={coverPreview}
+                                            alt="Selected cover preview"
+                                            className="mt-4 h-40 w-full max-w-xl border border-ink object-cover"
+                                        />
+                                    )}
+
+                                    <p className="mt-2 text-xs text-muted">
+                                        JPEG, PNG, or WebP. Maximum 5 MB.
+                                    </p>
+
+                                    {coverError && (
+                                        <p role="alert" className="mt-3 text-sm text-red-700">
+                                            {coverError}
+                                        </p>
+                                    )}
+
+                                    {coverSuccess && (
+                                        <p role="status" className="mt-3 text-sm">
+                                            {coverSuccess}
+                                        </p>
+                                    )}
+
+                                    <button
+                                        type="submit"
+                                        disabled={!coverFile || coverSubmitting}
+                                        className="mt-4 min-h-11 border-2 border-ink bg-mint px-4 py-2 text-sm font-semibold hover:bg-teal disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        {coverSubmitting ? "Uploading cover..." : "Save cover"}
+                                    </button>
+                                </form>
+                            )}
+
+
+
 
                             <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest">
                                 <Utensils size={16} />
