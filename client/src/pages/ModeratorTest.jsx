@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 function formatDate(value) {
     if (!value) return "Date unavailable";
 
-    const date = new Date(value);
+    const date = new Date(value);   
 
     return Number.isNaN(date.getTime())
         ? "Date unavailable"
@@ -17,6 +17,11 @@ function ModeratorTest() {
     const [requests, setRequests] = useState([]);
     const [profileReports, setProfileReports] = useState([]);
     const [restrictedContributors, setRestrictedContributors] = useState([]);
+    
+    const [commentReports, setCommentReports] = useState([]);
+    const [commentReportsLoading, setCommentReportsLoading] = useState(true);
+    const [commentReportError, setCommentReportError] = useState("");
+    const [commentReportStatus, setCommentReportStatus] = useState("pending");
 
     const [photosLoading, setPhotosLoading] = useState(true);
     const [requestsLoading, setRequestsLoading] = useState(true);
@@ -99,6 +104,101 @@ function ModeratorTest() {
         }
     }, []);
 
+
+    
+    // Load reports submitted against comments.
+    const loadCommentReportQueue = useCallback(async () => {
+        setCommentReportsLoading(true);
+        setCommentReportError("");
+
+        try {
+            const { data: reports, error: reportsError } = await supabase
+                .from("reports")
+                .select(
+                    "id, reported_by, comment_id, reason, details, status, created_at, reviewed_by, reviewed_at"
+                )
+                .not("comment_id", "is", null)
+                .eq("status", commentReportStatus)
+                .order("created_at", { ascending: false });
+
+            if (reportsError) throw reportsError;
+
+            if (!reports?.length) {
+                setCommentReports([]);
+                return;
+            }
+
+            const commentIds = [
+                ...new Set(reports.map((report) => report.comment_id)),
+            ];
+
+            const profileIds = [
+                ...new Set(reports.map((report) => report.reported_by)),
+            ];
+
+            const { data: comments, error: commentsError } = await supabase
+                .from("comments")
+                .select(
+                    "id, content, user_id, restaurant_id, created_at, updated_at"
+                )
+                .in("id", commentIds);
+
+            if (commentsError) throw commentsError;
+
+            const commentAuthors = (comments ?? [])
+                .map((comment) => comment.user_id)
+                .filter(Boolean);
+
+            const allProfileIds = [
+                ...new Set([...profileIds, ...commentAuthors]),
+            ];
+
+            let profiles = [];
+
+            if (allProfileIds.length > 0) {
+                const { data, error: profilesError } = await supabase
+                    .from("profiles")
+                    .select("id, username")
+                    .in("id", allProfileIds);
+
+                if (profilesError) throw profilesError;
+
+                profiles = data ?? [];
+            }
+
+            const commentById = new Map(
+                (comments ?? []).map((comment) => [
+                    comment.id,
+                    comment,
+                ])
+            );
+
+            const profileById = new Map(
+                profiles.map((profile) => [profile.id, profile])
+            );
+
+            setCommentReports(
+                reports.map((report) => ({
+                    ...report,
+                    comment: commentById.get(report.comment_id) ?? null,
+                    reporter: profileById.get(report.reported_by) ?? null,
+                    commentAuthor: profileById.get(
+                        commentById.get(report.comment_id)?.user_id
+                    ) ?? null,
+                }))
+            );
+        } catch (error) {
+            console.error("Failed to load comment reports:", error);
+            setCommentReportError(
+                "Unable to load comment reports. Please refresh the queue."
+            );
+        } finally {
+            setCommentReportsLoading(false);
+        }
+    }, [commentReportStatus]);
+
+
+
     // Load contributors whose contribution privileges are restricted.
     const loadRestrictedContributors = useCallback(async () => {
         setRestrictedLoading(true);
@@ -130,11 +230,13 @@ function ModeratorTest() {
         loadRequestQueue();
         loadProfileReportQueue();
         loadRestrictedContributors();
+        loadCommentReportQueue();
     }, [
         loadPhotoQueue,
         loadRequestQueue,
         loadProfileReportQueue,
         loadRestrictedContributors,
+        loadCommentReportQueue,
     ]);
 
     // Keep or remove a reported menu photo.
@@ -280,6 +382,102 @@ function ModeratorTest() {
             setProcessingId(null);
         }
     }
+
+    
+    // Review or dismiss a reported comment.
+    async function handleReviewCommentReport(report, action) {
+        const nextStatus =
+            action === "review" ? "reviewed" : "dismissed";
+
+        const confirmed = window.confirm(
+            action === "review"
+                ? "Mark this comment report as reviewed?"
+                : "Dismiss this comment report?"
+        );
+
+        if (!confirmed) return;
+
+        setProcessingId(`comment-report:${report.id}`);
+        setCommentReportError("");
+        setMessage("");
+
+        try {
+            const { error } = await supabase
+                .from("reports")
+                .update({
+                    status: nextStatus,
+                    reviewed_by: (await supabase.auth.getUser()).data.user?.id,
+                    reviewed_at: new Date().toISOString(),
+                })
+                .eq("id", report.id)
+                .eq("status", "pending");
+
+            if (error) throw error;
+
+            setMessage(
+                nextStatus === "reviewed"
+                    ? "Comment report marked as reviewed."
+                    : "Comment report dismissed."
+            );
+
+            await loadCommentReportQueue();
+        } catch (error) {
+            console.error("Failed to review comment report:", error);
+            setCommentReportError(
+                error.message ||
+                    "Could not update this report. Please try again."
+            );
+        } finally {
+            setProcessingId(null);
+        }
+    }
+
+
+    
+    // Delete a comment reported by the community.
+    async function handleDeleteReportedComment(report) {
+        if (!report.comment) {
+            setCommentReportError(
+                "This comment is already unavailable."
+            );
+            return;
+        }
+
+        const confirmed = window.confirm(
+            "Delete this comment from SeeMenu? This cannot be undone. The report record will remain available."
+        );
+
+        if (!confirmed) return;
+
+        setProcessingId(`delete-comment:${report.id}`);
+        setCommentReportError("");
+        setMessage("");
+
+        try {
+            const { error } = await supabase
+                .from("comments")
+                .delete()
+                .eq("id", report.comment.id);
+
+            if (error) throw error;
+
+            setMessage(
+                "Comment deleted successfully. The report record has been preserved."
+            );
+
+            await loadCommentReportQueue();
+        } catch (error) {
+            console.error("Failed to delete reported comment:", error);
+            setCommentReportError(
+                error.message ||
+                    "Could not delete this comment. Please try again."
+            );
+        } finally {
+            setProcessingId(null);
+        }
+    }
+
+
 
     // Restore contribution privileges.
     async function handleRestoreContributor(contributor) {
@@ -989,6 +1187,226 @@ function ModeratorTest() {
                         </div>
                     )}
                 </section>
+                
+                {/* QUEUE 04: REPORTED COMMENTS */}
+                <section className="mb-16">
+                    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+                        <div>
+                            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-muted">
+                                Queue 04
+                            </p>
+                            <h2 className="text-2xl font-extrabold">
+                                Reported comments
+                            </h2>
+                            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+                                Review comments reported by the community.
+                                Review the context before deciding what action
+                                to take.
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={loadCommentReportQueue}
+                            disabled={commentReportsLoading}
+                            className="border-2 border-ink px-4 py-2 text-sm font-semibold hover:bg-mint disabled:opacity-50"
+                        >
+                            {commentReportsLoading
+                                ? "Refreshing..."
+                                : "Refresh"}
+                        </button>
+                    </div>
+
+                    <div className="mb-6 flex flex-wrap items-center gap-3">
+                        <label
+                            htmlFor="comment-report-status"
+                            className="text-sm font-semibold"
+                        >
+                            Report status
+                        </label>
+
+                        <select
+                            id="comment-report-status"
+                            value={commentReportStatus}
+                            onChange={(event) =>
+                                setCommentReportStatus(event.target.value)
+                            }
+                            className="min-h-11 border-2 border-ink bg-paper px-3 py-2 text-sm"
+                        >
+                            <option value="pending">Pending</option>
+                            <option value="reviewed">Reviewed</option>
+                            <option value="dismissed">Dismissed</option>
+                        </select>
+                    </div>
+
+                    {commentReportError && (
+                        <div
+                            role="alert"
+                            className="mb-5 border-2 border-ink bg-pink p-4 text-sm"
+                        >
+                            {commentReportError}
+                        </div>
+                    )}
+
+                    {commentReportsLoading ? (
+                        <p role="status" className="py-6 text-sm">
+                            Loading comment reports...
+                        </p>
+                    ) : commentReports.length === 0 ? (
+                        <div className="border-y border-line py-8">
+                            <h3 className="font-bold">
+                                No {commentReportStatus} comment reports
+                            </h3>
+                            <p className="mt-2 text-sm text-muted">
+                                Reports with this status will appear here.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-line border-y border-line">
+                            {commentReports.map((report) => (
+                                <article
+                                    key={report.id}
+                                    className="py-7"
+                                >
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                        <div>
+                                            <h3 className="text-lg font-bold">
+                                                {report.reason}
+                                            </h3>
+                                            <p className="mt-1 text-sm text-muted">
+                                                Reported by:{" "}
+                                                {report.reporter?.username ||
+                                                    "Unknown user"}
+                                            </p>
+                                            <p className="mt-1 text-sm text-muted">
+                                                Submitted:{" "}
+                                                {formatDate(report.created_at)}
+                                            </p>
+                                        </div>
+
+                                        <span className="border border-ink px-3 py-1 text-xs font-bold uppercase">
+                                            {report.status}
+                                        </span>
+                                    </div>
+
+                                    {report.details && (
+                                        <div className="mt-4 border-l-2 border-teal pl-4">
+                                            <h4 className="text-xs font-bold uppercase tracking-wide text-muted">
+                                                Report details
+                                            </h4>
+                                            <p className="mt-1 whitespace-pre-wrap text-sm leading-6">
+                                                {report.details}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="mt-5 border-2 border-ink p-4">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-muted">
+                                            Reported comment
+                                        </p>
+
+                                        {report.comment ? (
+                                            <>
+                                                <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">
+                                                    {report.comment.content}
+                                                </p>
+                                                <p className="mt-3 text-xs text-muted">
+                                                    Author:{" "}
+                                                    {report.commentAuthor?.username ||
+                                                        "Unknown or deleted user"}
+                                                </p>
+                                                <p className="mt-1 text-xs text-muted">
+                                                    Comment posted:{" "}
+                                                    {formatDate(
+                                                        report.comment.created_at
+                                                    )}
+                                                </p>
+                                                <p className="mt-1 break-all text-xs text-muted">
+                                                    Comment ID:{" "}
+                                                    {report.comment.id}
+                                                </p>
+                                            </>
+                                        ) : (
+                                            <p className="mt-2 text-sm text-muted">
+                                                This comment is no longer
+                                                available. The report remains
+                                                available for review.
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {report.reviewed_at && (
+                                        <p className="mt-3 text-xs text-muted">
+                                            Reviewed:{" "}
+                                            {formatDate(report.reviewed_at)}
+                                        </p>
+                                    )}
+
+                                    
+                                    {report.status === "pending" && (
+                                        <div className="mt-5 flex flex-wrap gap-3">
+                                            <button
+                                                type="button"
+                                                disabled={processingId !== null}
+                                                onClick={() =>
+                                                    handleReviewCommentReport(
+                                                        report,
+                                                        "review"
+                                                    )
+                                                }
+                                                className="border-2 border-ink bg-mint px-4 py-3 text-sm font-bold hover:bg-teal disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                {processingId ===
+                                                `comment-report:${report.id}`
+                                                    ? "Processing..."
+                                                    : "Mark reviewed"}
+                                            </button>
+
+                                            <button
+                                                type="button"
+                                                disabled={processingId !== null}
+                                                onClick={() =>
+                                                    handleReviewCommentReport(
+                                                        report,
+                                                        "dismiss"
+                                                    )
+                                                }
+                                                className="border-2 border-ink px-4 py-3 text-sm font-bold hover:bg-pink disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                Dismiss report
+                                            </button>
+                                            
+                                            <button
+                                                type="button"
+                                                disabled={
+                                                    processingId !== null ||
+                                                    !report.comment
+                                                }
+                                                onClick={() =>
+                                                    handleDeleteReportedComment(
+                                                        report
+                                                    )
+                                                }
+                                                className="border-2 border-ink bg-pink px-4 py-3 text-sm font-bold hover:bg-mint disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                {processingId ===
+                                                `delete-comment:${report.id}`
+                                                    ? "Deleting..."
+                                                    : "Delete comment"}
+                                            </button>
+
+                                        </div>
+                                    )}
+
+                                    
+
+
+                                </article>
+                            ))}
+                        </div>
+                    )}
+                </section>
+
             </main>
         </div>
     );

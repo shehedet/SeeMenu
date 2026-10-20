@@ -68,6 +68,15 @@ function RestaurantDetails() {
     const [editingCommentText, setEditingCommentText] = useState("");
     const [commentSuccess, setCommentSuccess] = useState("");
 
+    
+    const [reportingCommentId, setReportingCommentId] = useState(null);
+    const [commentReportReason, setCommentReportReason] = useState("");
+    const [commentReportDetails, setCommentReportDetails] = useState("");
+    const [commentReportSubmitting, setCommentReportSubmitting] = useState(false);
+    const [commentReportError, setCommentReportError] = useState("");
+    const [commentReportSuccess, setCommentReportSuccess] = useState("");
+
+
 
 
     useEffect(() => {
@@ -225,6 +234,90 @@ function RestaurantDetails() {
             setCommentSubmitting(false);
         }
     };
+
+
+
+    
+    const canModerateComments = ["moderator", "admin"].includes(profile?.role);
+
+    const handleCommentEdit = async (commentId) => {
+        const content = editingCommentText.trim();
+
+        if (!content) {
+            setCommentsError("A comment cannot be empty.");
+            return;
+        }
+
+        if (content.length > 2000) {
+            setCommentsError("Comments cannot exceed 2000 characters.");
+            return;
+        }
+
+        if (commentActionId) return;
+
+        setCommentActionId(commentId);
+        setCommentsError("");
+        setCommentSuccess("");
+
+        try {
+            const { error: updateError } = await supabase
+                .from("comments")
+                .update({
+                    content,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", commentId);
+
+            if (updateError) throw updateError;
+
+            setEditingCommentId(null);
+            setEditingCommentText("");
+            setCommentSuccess("Comment updated successfully.");
+
+            await refreshComments();
+        } catch (err) {
+            console.error("Error updating comment:", err);
+            setCommentsError(err.message || "Unable to update comment.");
+        } finally {
+            setCommentActionId("");
+        }
+    };
+
+    const handleCommentDelete = async (comment) => {
+        const confirmed = window.confirm(
+            "Are you sure you want to delete this comment? This cannot be undone."
+        );
+
+        if (!confirmed || commentActionId) return;
+
+        setCommentActionId(comment.id);
+        setCommentsError("");
+        setCommentSuccess("");
+
+        try {
+            const { error: deleteError } = await supabase
+                .from("comments")
+                .delete()
+                .eq("id", comment.id);
+
+            if (deleteError) throw deleteError;
+
+            if (editingCommentId === comment.id) {
+                setEditingCommentId(null);
+                setEditingCommentText("");
+            }
+
+            setCommentSuccess("Comment deleted successfully.");
+            await refreshComments();
+        } catch (err) {
+            console.error("Error deleting comment:", err);
+            setCommentsError(err.message || "Unable to delete comment.");
+        } finally {
+            setCommentActionId("");
+        }
+    };
+
+
 
 
 
@@ -687,6 +780,55 @@ function RestaurantDetails() {
             setSubmittingMenuVoteId(null);
         }
     };
+
+
+    
+    const handleCommentReport = async (event, commentId) => {
+        event.preventDefault();
+
+        if (!user) {
+            setCommentReportError("Please log in to report a comment.");
+            return;
+        }
+
+        if (!commentReportReason) {
+            setCommentReportError("Choose a reason for reporting.");
+            return;
+        }
+
+        if (commentReportSubmitting) return;
+
+        setCommentReportSubmitting(true);
+        setCommentReportError("");
+        setCommentReportSuccess("");
+
+        try {
+            const { error: insertError } = await supabase
+                .from("reports")
+                .insert({
+                    reported_by: user.id,
+                    comment_id: commentId,
+                    reason: commentReportReason,
+                    details: commentReportDetails.trim() || null,
+                    status: "pending",
+                });
+
+            if (insertError) throw insertError;
+
+            setCommentReportSuccess("Comment reported. The moderation team can review it.");
+            setReportingCommentId(null);
+            setCommentReportReason("");
+            setCommentReportDetails("");
+        } catch (err) {
+            console.error("Error reporting comment:", err);
+            setCommentReportError(
+                err.message || "Unable to submit the report. Please try again."
+            );
+        } finally {
+            setCommentReportSubmitting(false);
+        }
+    };
+
 
 
 
@@ -1341,7 +1483,216 @@ function RestaurantDetails() {
                                             </div>
 
                                             <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6">
-                                                {comment.content}
+                                                {/* {comment.content} */}
+                                                {editingCommentId === comment.id ? (
+                                                    <form
+                                                        onSubmit={(event) => {
+                                                            event.preventDefault();
+                                                            handleCommentEdit(comment.id);
+                                                        }}
+                                                        className="mt-3"
+                                                    >
+                                                        <textarea
+                                                            value={editingCommentText}
+                                                            onChange={(event) =>
+                                                                setEditingCommentText(event.target.value)
+                                                            }
+                                                            maxLength={2000}
+                                                            rows={4}
+                                                            required
+                                                            disabled={commentActionId === comment.id}
+                                                            className="w-full border-2 border-ink bg-paper p-3 text-sm outline-none focus:border-teal"
+                                                        />
+
+                                                        <div className="mt-3 flex flex-wrap gap-3">
+                                                            <button
+                                                                type="submit"
+                                                                disabled={
+                                                                    !editingCommentText.trim() ||
+                                                                    commentActionId === comment.id
+                                                                }
+                                                                className="min-h-10 border-2 border-ink bg-mint px-3 py-2 text-sm font-semibold hover:bg-teal disabled:opacity-60"
+                                                            >
+                                                                {commentActionId === comment.id
+                                                                    ? "Saving..."
+                                                                    : "Save changes"}
+                                                            </button>
+
+                                                            <button
+                                                                type="button"
+                                                                disabled={commentActionId === comment.id}
+                                                                onClick={() => {
+                                                                    setEditingCommentId(null);
+                                                                    setEditingCommentText("");
+                                                                }}
+                                                                className="min-h-10 border border-line px-3 py-2 text-sm"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                        </div>
+                                                    </form>
+                                                ) : (
+                                                    <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6">
+                                                        {comment.content}
+                                                    </p>
+                                                )}
+
+                                                {comment.updated_at &&
+                                                    comment.created_at &&
+                                                    new Date(comment.updated_at).getTime() >
+                                                        new Date(comment.created_at).getTime() + 1000 && (
+                                                        <p className="mt-2 text-xs text-muted">
+                                                            Edited
+                                                        </p>
+                                                    )}
+
+                                                {user && (
+                                                    <div className="mt-4 flex flex-wrap gap-4">
+                                                        {(comment.user_id === user.id || canModerateComments) && (
+                                                            <>
+                                                                {comment.user_id === user.id && (
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={Boolean(commentActionId)}
+                                                                        onClick={() => {
+                                                                            setEditingCommentId(comment.id);
+                                                                            setEditingCommentText(comment.content || "");
+                                                                            setCommentsError("");
+                                                                            setCommentSuccess("");
+                                                                        }}
+                                                                        className="text-sm font-semibold underline underline-offset-4 disabled:opacity-50"
+                                                                    >
+                                                                        Edit
+                                                                    </button>
+                                                                )}
+
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={Boolean(commentActionId)}
+                                                                    onClick={() => handleCommentDelete(comment)}
+                                                                    className="text-sm font-semibold text-red-700 underline underline-offset-4 disabled:opacity-50"
+                                                                >
+                                                                    {commentActionId === comment.id
+                                                                        ? "Deleting..."
+                                                                        : "Delete"}
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                
+                                                {user && comment.user_id !== user.id && (
+                                                    <div className="mt-4">
+                                                        {reportingCommentId === comment.id ? (
+                                                            <form
+                                                                onSubmit={(event) =>
+                                                                    handleCommentReport(event, comment.id)
+                                                                }
+                                                                className="mt-3 border-t border-line pt-4"
+                                                            >
+                                                                <label
+                                                                    htmlFor={`comment-report-reason-${comment.id}`}
+                                                                    className="block text-sm font-semibold"
+                                                                >
+                                                                    Why are you reporting this comment?
+                                                                </label>
+
+                                                                <select
+                                                                    id={`comment-report-reason-${comment.id}`}
+                                                                    value={commentReportReason}
+                                                                    onChange={(event) =>
+                                                                        setCommentReportReason(event.target.value)
+                                                                    }
+                                                                    required
+                                                                    disabled={commentReportSubmitting}
+                                                                    className="mt-2 min-h-11 w-full border-2 border-ink bg-paper px-3 py-2 text-sm"
+                                                                >
+                                                                    <option value="">Choose a reason</option>
+                                                                    <option value="Spam">Spam or advertising</option>
+                                                                    <option value="Abusive content">Abusive or hateful content</option>
+                                                                    <option value="Harassment">Harassment or bullying</option>
+                                                                    <option value="False information">False or misleading information</option>
+                                                                    <option value="Other">Other</option>
+                                                                </select>
+
+                                                                <label
+                                                                    htmlFor={`comment-report-details-${comment.id}`}
+                                                                    className="mt-4 block text-sm font-semibold"
+                                                                >
+                                                                    Additional details (optional)
+                                                                </label>
+
+                                                                <textarea
+                                                                    id={`comment-report-details-${comment.id}`}
+                                                                    value={commentReportDetails}
+                                                                    onChange={(event) =>
+                                                                        setCommentReportDetails(event.target.value)
+                                                                    }
+                                                                    maxLength={1000}
+                                                                    rows={3}
+                                                                    disabled={commentReportSubmitting}
+                                                                    placeholder="Provide context for the moderation team..."
+                                                                    className="mt-2 w-full border-2 border-ink bg-paper p-3 text-sm"
+                                                                />
+
+                                                                {commentReportError && (
+                                                                    <p role="alert" className="mt-3 text-sm text-red-700">
+                                                                        {commentReportError}
+                                                                    </p>
+                                                                )}
+
+                                                                <div className="mt-3 flex flex-wrap gap-3">
+                                                                    <button
+                                                                        type="submit"
+                                                                        disabled={!commentReportReason || commentReportSubmitting}
+                                                                        className="min-h-10 border-2 border-ink bg-pink px-3 py-2 text-sm font-semibold disabled:opacity-60"
+                                                                    >
+                                                                        {commentReportSubmitting
+                                                                            ? "Submitting..."
+                                                                            : "Submit report"}
+                                                                    </button>
+
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled={commentReportSubmitting}
+                                                                        onClick={() => {
+                                                                            setReportingCommentId(null);
+                                                                            setCommentReportReason("");
+                                                                            setCommentReportDetails("");
+                                                                            setCommentReportError("");
+                                                                        }}
+                                                                        className="min-h-10 border border-line px-3 py-2 text-sm"
+                                                                    >
+                                                                        Cancel
+                                                                    </button>
+                                                                </div>
+                                                            </form>
+                                                        ) : (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setReportingCommentId(comment.id);
+                                                                    setCommentReportReason("");
+                                                                    setCommentReportDetails("");
+                                                                    setCommentReportError("");
+                                                                    setCommentReportSuccess("");
+                                                                }}
+                                                                className="text-sm text-muted underline underline-offset-4 hover:text-ink"
+                                                            >
+                                                                Report comment
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                
+                                                {commentReportSuccess && (
+                                                    <p role="status" className="mt-4 text-sm">
+                                                        {commentReportSuccess}
+                                                    </p>
+                                                )}
+
+
                                             </p>
                                         </article>
                                     ))
