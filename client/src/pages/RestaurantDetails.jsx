@@ -30,8 +30,7 @@ function RestaurantDetails() {
 
     const { user, profile, loading: authLoading } = useAuth();
     
-    const canEditCover =
-        user && ["moderator", "admin"].includes(profile?.role);
+    const canEditCover = user && ["moderator", "admin"].includes(profile?.role);
 
     const [coverFile, setCoverFile] = useState(null);
     const [coverPreview, setCoverPreview] = useState("");
@@ -57,6 +56,19 @@ function RestaurantDetails() {
     const [menuVotesLoading, setMenuVotesLoading] = useState(true);
     const [submittingMenuVoteId, setSubmittingMenuVoteId] = useState(null);
     const [menuVotesError, setMenuVotesError] = useState("");
+
+    
+    const [comments, setComments] = useState([]);
+    const [commentsLoading, setCommentsLoading] = useState(true);
+    const [commentsError, setCommentsError] = useState("");
+    const [commentText, setCommentText] = useState("");
+    const [commentSubmitting, setCommentSubmitting] = useState(false);
+    const [commentActionId, setCommentActionId] = useState("");
+    const [editingCommentId, setEditingCommentId] = useState(null);
+    const [editingCommentText, setEditingCommentText] = useState("");
+    const [commentSuccess, setCommentSuccess] = useState("");
+
+
 
     useEffect(() => {
         const controller = new AbortController();
@@ -148,7 +160,6 @@ function RestaurantDetails() {
         return () => controller.abort();
     }, [id]);
 
-
     
 
 
@@ -167,6 +178,99 @@ function RestaurantDetails() {
         setReportError("");
         setReportSuccess("");
     };
+
+
+    
+    const handleCommentSubmit = async (event) => {
+        event.preventDefault();
+
+        if (!user) {
+            setCommentsError("Please log in to leave a comment.");
+            return;
+        }
+
+        const content = commentText.trim();
+
+        if (!content) {
+            setCommentsError("Write a comment before submitting.");
+            return;
+        }
+
+        if (commentSubmitting) return;
+
+        setCommentSubmitting(true);
+        setCommentsError("");
+        setCommentSuccess("");
+
+        try {
+            const { error: insertError } = await supabase
+                .from("comments")
+                .insert({
+                    restaurant_id: restaurant.id,
+                    user_id: user.id,
+                    content,
+                });
+
+            if (insertError) throw insertError;
+
+            setCommentText("");
+            setCommentSuccess("Your comment was posted.");
+            await refreshComments();
+        } catch (err) {
+            console.error("Error posting comment:", err);
+            setCommentsError(
+                err.message || "Unable to post your comment."
+            );
+        } finally {
+            setCommentSubmitting(false);
+        }
+    };
+
+
+
+    
+    const refreshComments = useCallback(async () => {
+        if (!restaurant?.id) return;
+
+        setCommentsLoading(true);
+        setCommentsError("");
+
+        try {
+            const { data, error: fetchError } = await supabase
+                .from("comments")
+                .select(`
+                    id,
+                    restaurant_id,
+                    user_id,
+                    content,
+                    created_at,
+                    updated_at,
+                    profiles (
+                        id,
+                        username
+                    )
+                `)
+                .eq("restaurant_id", restaurant.id)
+                .order("created_at", { ascending: false });
+
+            if (fetchError) throw fetchError;
+
+            setComments(data || []);
+        } catch (err) {
+            console.error("Error loading comments:", err);
+            setCommentsError("Unable to load comments. Please try again.");
+        } finally {
+            setCommentsLoading(false);
+        }
+    }, [restaurant?.id]);
+
+
+
+    useEffect(() => {
+        refreshComments();
+    }, [refreshComments]);
+
+
 
     const handleReportSubmit = async (event) => {
         event.preventDefault();
@@ -1138,6 +1242,115 @@ function RestaurantDetails() {
                                 </div>
                             )}
                         </section>
+                        
+
+                        
+                        <section className="mt-8 border-t-2 border-ink py-8 sm:mt-12 sm:py-10">
+                            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                <h2 className="text-2xl font-bold">
+                                    Comments
+                                </h2>
+                                <span className="text-sm text-muted">
+                                    {comments.length} {comments.length === 1 ? "comment" : "comments"}
+                                </span>
+                            </div>
+
+                            <form onSubmit={handleCommentSubmit} className="mt-5">
+                                <label
+                                    htmlFor="restaurant-comment"
+                                    className="block text-sm font-semibold"
+                                >
+                                    Leave a comment
+                                </label>
+
+                                <textarea
+                                    id="restaurant-comment"
+                                    value={commentText}
+                                    onChange={(event) => setCommentText(event.target.value)}
+                                    placeholder={
+                                        user
+                                            ? "Share your experience with this restaurant..."
+                                            : "Log in to leave a comment."
+                                    }
+                                    disabled={!user || commentSubmitting}
+                                    maxLength={2000}
+                                    rows={4}
+                                    className="mt-2 w-full border-2 border-ink bg-paper p-3 text-sm outline-none focus:border-teal disabled:opacity-60"
+                                />
+
+                                <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                                    <span className="text-xs text-muted">
+                                        {commentText.length}/2000 characters
+                                    </span>
+
+                                    <button
+                                        type="submit"
+                                        disabled={!user || !commentText.trim() || commentSubmitting}
+                                        className="min-h-11 border-2 border-ink bg-mint px-4 py-2 text-sm font-semibold hover:bg-teal disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        {commentSubmitting ? "Posting..." : "Post comment"}
+                                    </button>
+                                </div>
+                            </form>
+
+                            {commentsError && (
+                                <p role="alert" className="mt-4 text-sm text-red-700">
+                                    {commentsError}
+                                </p>
+                            )}
+
+                            {commentSuccess && (
+                                <p role="status" className="mt-4 text-sm">
+                                    {commentSuccess}
+                                </p>
+                            )}
+
+                            <div className="mt-8 divide-y divide-line border-y border-line">
+                                {commentsLoading ? (
+                                    <p className="py-5 text-sm text-muted">
+                                        Loading comments...
+                                    </p>
+                                ) : comments.length === 0 ? (
+                                    <p className="py-5 text-sm text-muted">
+                                        No comments yet. Be the first to share your experience.
+                                    </p>
+                                ) : (
+                                    comments.map((comment) => (
+                                        <article key={comment.id} className="py-5">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <p className="text-sm font-semibold">
+                                                    {comment.profiles?.username ||
+                                                        (comment.user_id ? "Community member" : "Deleted user")}
+                                                </p>
+
+                                                <time
+                                                    dateTime={comment.created_at || ""}
+                                                    className="text-xs text-muted"
+                                                >
+                                                    {comment.created_at
+                                                        ? new Date(comment.created_at).toLocaleDateString(
+                                                            undefined,
+                                                            {
+                                                                year: "numeric",
+                                                                month: "short",
+                                                                day: "numeric",
+                                                            }
+                                                        )
+                                                        : "Date unavailable"}
+                                                </time>
+                                            </div>
+
+                                            <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6">
+                                                {comment.content}
+                                            </p>
+                                        </article>
+                                    ))
+                                )}
+                            </div>
+                        </section>
+
+
+
                     </>
                 ) : null}
 
