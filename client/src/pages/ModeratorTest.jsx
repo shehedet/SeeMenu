@@ -115,7 +115,7 @@ function ModeratorTest() {
             const { data: reports, error: reportsError } = await supabase
                 .from("reports")
                 .select(
-                    "id, reported_by, comment_id, reason, details, status, created_at, reviewed_by, reviewed_at"
+                    "id, reported_by, comment_id, reason, details, status, created_at, reviewed_by, reviewed_at, reported_comment_content, comment_deleted_at"
                 )
                 .not("comment_id", "is", null)
                 .eq("status", commentReportStatus)
