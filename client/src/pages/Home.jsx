@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, Search, Utensils } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -5,6 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import Navbar from "../components/Navbar";
 import RestaurantCard from "../components/RestaurantCard";
 
+const API_URL =
+    import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 function Home() {
     const { user, profile } = useAuth();
@@ -13,15 +16,7 @@ function Home() {
     const [restaurants, setRestaurants] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState("");
-
-
-    const handleRestaurantDeleted = (restaurantId) => {
-        setRestaurants((currentRestaurants) =>
-            currentRestaurants.filter(
-                (restaurant) => restaurant.id !== restaurantId
-            )
-        );
-    };
+    const [visibleCount, setVisibleCount] = useState(6);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -31,15 +26,10 @@ function Home() {
                 setIsLoading(true);
                 setError("");
 
-                
-                const API_URL =
-                    import.meta.env.VITE_API_URL || "http://localhost:5000";
-
                 const response = await fetch(
                     `${API_URL}/api/restaurants`,
                     { signal: controller.signal }
                 );
-
 
                 if (!response.ok) {
                     throw new Error("Unable to load restaurants.");
@@ -77,6 +67,9 @@ function Home() {
                 restaurant.address,
                 restaurant.area,
                 restaurant.city,
+                ...(Array.isArray(restaurant.foodTypes)
+                    ? restaurant.foodTypes
+                    : []),
             ]
                 .filter(Boolean)
                 .join(" ")
@@ -86,6 +79,18 @@ function Home() {
         });
     }, [searchQuery, restaurants]);
 
+    const isSearching = searchQuery.trim().length > 0;
+
+    const visibleRestaurants = isSearching
+        ? filteredRestaurants
+        : filteredRestaurants.slice(0, visibleCount);
+
+    useEffect(() => {
+        setVisibleCount(6);
+    }, [searchQuery]);
+
+    const isModeratorOrAdmin =
+        user && ["moderator", "admin"].includes(profile?.role);
 
     return (
         <div className="min-h-screen bg-paper text-ink">
@@ -98,7 +103,7 @@ function Home() {
                 <section className="border-b border-line">
                     <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
                         <p className="mb-5 flex items-center gap-2 text-sm font-semibold uppercase tracking-widest">
-                            <Utensils size={17} />
+                            <Utensils size={17} aria-hidden="true" />
                             Your community food directory
                         </p>
 
@@ -115,20 +120,24 @@ function Home() {
                             menus shared by the people who visit them.
                         </p>
 
-
-
                         <div className="mt-8 flex max-w-4xl flex-col items-stretch gap-3 sm:flex-row sm:items-stretch">
                             <form
                                 role="search"
                                 className="flex min-w-0 flex-1 items-center border-2 border-ink bg-white p-1"
                                 onSubmit={(event) => event.preventDefault()}
                             >
-                                <Search size={20} className="ml-3 shrink-0" />
+                                <Search
+                                    size={20}
+                                    className="ml-3 shrink-0"
+                                    aria-hidden="true"
+                                />
 
                                 <input
                                     type="search"
                                     value={searchQuery}
-                                    onChange={(event) => setSearchQuery(event.target.value)}
+                                    onChange={(event) =>
+                                        setSearchQuery(event.target.value)
+                                    }
                                     placeholder="Try biryani, Dhanmondi, or a restaurant..."
                                     aria-label="Search food places"
                                     className="min-w-0 flex-1 bg-transparent px-3 py-3 outline-none placeholder:text-muted"
@@ -142,7 +151,6 @@ function Home() {
                                 </button>
                             </form>
 
-                            
                             {user && profile?.role === "contributor" && (
                                 <Link
                                     to="/request-restaurant"
@@ -152,22 +160,19 @@ function Home() {
                                 </Link>
                             )}
 
-                            {user &&
-                                (profile?.role === "moderator" || profile?.role === "admin") && (
-                                    <Link
-                                        to="/create-restaurant"
-                                        className="flex shrink-0 items-center justify-center border-2 border-ink bg-mint px-5 py-3 text-sm font-bold hover:bg-teal"
-                                    >
-                                        + Create a Restaurant
-                                    </Link>
-                                )}
-
+                            {isModeratorOrAdmin && (
+                                <Link
+                                    to="/create-restaurant"
+                                    className="flex shrink-0 items-center justify-center border-2 border-ink bg-mint px-5 py-3 text-sm font-bold hover:bg-teal"
+                                >
+                                    + Create a Restaurant
+                                </Link>
+                            )}
                         </div>
 
                         <p className="mt-3 text-sm text-muted">
                             Search by restaurant, food type, or area.
                         </p>
-
                     </div>
                 </section>
 
@@ -189,10 +194,10 @@ function Home() {
                                 {isLoading
                                     ? "Loading places..."
                                     : error
-                                        ? "Places unavailable"
-                                        : searchQuery.trim()
-                                            ? `${filteredRestaurants.length} matching places`
-                                            : `${restaurants.length} places listed`}
+                                      ? "Places unavailable"
+                                      : searchQuery.trim()
+                                        ? `${filteredRestaurants.length} matching places`
+                                        : `${restaurants.length} places listed`}
                             </p>
                         </div>
 
@@ -201,38 +206,64 @@ function Home() {
                             className="flex items-center gap-2 border-b border-ink pb-1 text-sm font-semibold hover:border-teal"
                         >
                             Browse listings
-                            <ArrowDown size={16} />
+                            <ArrowDown size={16} aria-hidden="true" />
                         </a>
                     </div>
 
                     {isLoading ? (
-                        <div className="border-y border-line py-12" role="status">
-                            <p className="text-lg font-semibold">Loading food places...</p>
+                        <div
+                            className="border-y border-line py-12"
+                            role="status"
+                        >
+                            <p className="text-lg font-semibold">
+                                Loading food places...
+                            </p>
                             <p className="mt-2 text-sm text-muted">
                                 Fetching the latest approved restaurant listings.
                             </p>
                         </div>
                     ) : error ? (
-                        <div className="border-y border-line py-12" role="alert">
+                        <div
+                            className="border-y border-line py-12"
+                            role="alert"
+                        >
                             <h3 className="text-xl font-bold">
                                 Couldn't load food places
                             </h3>
                             <p className="mt-2 text-muted">{error}</p>
                             <p className="mt-2 text-sm text-muted">
-                                Check that your Express server is running on port 5000,
+                                Check that your Express server is running,
                                 then reload the page.
                             </p>
                         </div>
+                    
                     ) : filteredRestaurants.length > 0 ? (
-                        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                            {filteredRestaurants.map((restaurant) => (
-                                <RestaurantCard
-                                    key={restaurant.id}
-                                    restaurant={restaurant}
-                                    onDeleted={handleRestaurantDeleted}
-                                />
-                            ))}
-                        </div>
+                        <>
+                            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                                {visibleRestaurants.map((restaurant) => (
+                                    <RestaurantCard
+                                        key={restaurant.id}
+                                        restaurant={restaurant}
+                                    />
+                                ))}
+                            </div>
+
+                            {!isSearching &&
+                                visibleCount < filteredRestaurants.length && (
+                                    <div className="mt-8 flex justify-center">
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setVisibleCount((current) => current + 6)
+                                            }
+                                            className="min-h-11 border-2 border-ink bg-mint px-8 py-3 text-sm font-bold hover:bg-teal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                                        >
+                                            See more
+                                        </button>
+                                    </div>
+                                )}
+                        </>
+
                     ) : (
                         <div className="border-y border-line py-12">
                             <h3 className="text-xl font-bold">

@@ -1,7 +1,6 @@
 
 import { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
     ArrowLeft,
     MapPin,
@@ -19,10 +18,13 @@ import { supabase } from "../lib/supabase";
 
 function RestaurantDetails() {
     const { id } = useParams();
-
+    const navigate = useNavigate();
     const [restaurant, setRestaurant] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState("");
+
+    const [deletingRestaurant, setDeletingRestaurant] = useState(false);
+    const [deleteRestaurantError, setDeleteRestaurantError] = useState("");
 
     const [menuImages, setMenuImages] = useState([]);
     const [isMenusLoading, setIsMenusLoading] = useState(true);
@@ -32,13 +34,23 @@ function RestaurantDetails() {
     const [menuDeleteError, setMenuDeleteError] = useState("");
     const { user, profile, loading: authLoading } = useAuth();
     
-    const canEditCover = user && ["moderator", "admin"].includes(profile?.role);
+    const canEditRestaurant =
+    user && ["moderator", "admin"].includes(profile?.role);
 
-    const [coverFile, setCoverFile] = useState(null);
-    const [coverPreview, setCoverPreview] = useState("");
-    const [coverSubmitting, setCoverSubmitting] = useState(false);
-    const [coverError, setCoverError] = useState("");
-    const [coverSuccess, setCoverSuccess] = useState("");
+    const [isEditingRestaurant, setIsEditingRestaurant] = useState(false);
+    const [editForm, setEditForm] = useState({
+        name: "",
+        description: "",
+        address: "",
+        area: "",
+        city: "",
+        google_maps_url: "",
+    });
+    const [editCoverFile, setEditCoverFile] = useState(null);
+    const [editCoverPreview, setEditCoverPreview] = useState("");
+    const [editSubmitting, setEditSubmitting] = useState(false);
+    const [editError, setEditError] = useState("");
+    const [editSuccess, setEditSuccess] = useState("");
 
     const [reportingImage, setReportingImage] = useState(null);
     const [reportReason, setReportReason] = useState("");
@@ -517,13 +529,46 @@ function RestaurantDetails() {
     };
 
 
-    const handleCoverFileChange = (event) => {
+    
+    const startEditingRestaurant = () => {
+        setEditForm({
+            name: restaurant.name || "",
+            description: restaurant.description || "",
+            address: restaurant.address || "",
+            area: restaurant.area || "",
+            city: restaurant.city || "",
+            google_maps_url: restaurant.google_maps_url || "",
+        });
+
+        setEditCoverFile(null);
+        setEditCoverPreview("");
+        setEditError("");
+        setEditSuccess("");
+        setIsEditingRestaurant(true);
+    };
+
+    const cancelEditingRestaurant = () => {
+        if (editCoverPreview) {
+            URL.revokeObjectURL(editCoverPreview);
+        }
+
+        setEditCoverFile(null);
+        setEditCoverPreview("");
+        setEditError("");
+        setIsEditingRestaurant(false);
+    };
+
+    const handleEditCoverChange = (event) => {
         const file = event.target.files?.[0];
 
-        setCoverError("");
-        setCoverSuccess("");
-        setCoverFile(null);
-        setCoverPreview("");
+        setEditError("");
+
+        if (editCoverPreview) {
+            URL.revokeObjectURL(editCoverPreview);
+        }
+
+        setEditCoverFile(null);
+        setEditCoverPreview("");
 
         if (!file) return;
 
@@ -534,93 +579,170 @@ function RestaurantDetails() {
         ];
 
         if (!allowedTypes.includes(file.type)) {
-            setCoverError("Choose a JPEG, PNG, or WebP image.");
+            setEditError("Choose a JPEG, PNG, or WebP image.");
             event.target.value = "";
             return;
         }
 
         if (file.size > 5 * 1024 * 1024) {
-            setCoverError("The image must be 5 MB or smaller.");
+            setEditError("The cover image must be 5 MB or smaller.");
             event.target.value = "";
             return;
         }
 
-        setCoverFile(file);
-        setCoverPreview(URL.createObjectURL(file));
+        setEditCoverFile(file);
+        setEditCoverPreview(URL.createObjectURL(file));
     };
 
-    const handleCoverUpload = async (event) => {
+    const handleRestaurantUpdate = async (event) => {
         event.preventDefault();
 
-        if (!user || !canEditCover) {
-            setCoverError(
-                "Only moderators and admins can change restaurant covers."
-            );
+        if (!user || !canEditRestaurant) {
+            setEditError("Only moderators and admins can edit restaurants.");
             return;
         }
 
-        if (!coverFile || !restaurant?.id) {
-            setCoverError("Choose an image before saving.");
+        const name = editForm.name.trim();
+
+        if (!name) {
+            setEditError("Restaurant name is required.");
             return;
         }
 
-        if (coverSubmitting) return;
+        if (name.length > 150) {
+            setEditError("Restaurant name cannot exceed 150 characters.");
+            return;
+        }
 
-        setCoverSubmitting(true);
-        setCoverError("");
-        setCoverSuccess("");
+        const mapsUrl = editForm.google_maps_url.trim();
+
+        if (mapsUrl) {
+            try {
+                const parsedUrl = new URL(mapsUrl);
+
+                if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+                    throw new Error();
+                }
+            } catch {
+                setEditError("Enter a valid Google Maps URL.");
+                return;
+            }
+        }
+
+        if (editSubmitting) return;
+
+        setEditSubmitting(true);
+        setEditError("");
+        setEditSuccess("");
 
         let uploadedPath = "";
 
         try {
-            const extensionByType = {
-                "image/jpeg": "jpg",
-                "image/png": "png",
-                "image/webp": "webp",
+            let coverUrl = restaurant.cover_image_url || null;
+
+            // Upload a new cover only if the editor has selected one.
+            if (editCoverFile) {
+                const extensionByType = {
+                    "image/jpeg": "jpg",
+                    "image/png": "png",
+                    "image/webp": "webp",
+                };
+
+                const extension = extensionByType[editCoverFile.type];
+
+                uploadedPath =
+                    `${restaurant.id}/${crypto.randomUUID()}.${extension}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from("restaurant-covers")
+                    .upload(uploadedPath, editCoverFile, {
+                        contentType: editCoverFile.type,
+                        upsert: false,
+                    });
+
+                if (uploadError) throw uploadError;
+
+                const { data: publicUrlData } = supabase.storage
+                    .from("restaurant-covers")
+                    .getPublicUrl(uploadedPath);
+
+                coverUrl = publicUrlData.publicUrl;
+            }
+
+            const updatedFields = {
+                name,
+                description: editForm.description.trim() || null,
+                address: editForm.address.trim() || null,
+                area: editForm.area.trim() || null,
+                city: editForm.city.trim() || null,
+                google_maps_url: mapsUrl || null,
+                cover_image_url: coverUrl,
+                updated_at: new Date().toISOString(),
             };
-
-            const extension = extensionByType[coverFile.type];
-
-            // A unique path prevents overwriting a cached cover image.
-            uploadedPath =
-                `${restaurant.id}/${crypto.randomUUID()}.${extension}`;
-
-            const { error: uploadError } = await supabase.storage
-                .from("restaurant-covers")
-                .upload(uploadedPath, coverFile, {
-                    contentType: coverFile.type,
-                    upsert: false,
-                });
-
-            if (uploadError) throw uploadError;
-
-            const { data: publicUrlData } = supabase.storage
-                .from("restaurant-covers")
-                .getPublicUrl(uploadedPath);
-
-            const coverUrl = publicUrlData.publicUrl;
 
             const { data: updatedRestaurant, error: updateError } =
                 await supabase
                     .from("restaurants")
-                    .update({ cover_image_url: coverUrl })
+                    .update(updatedFields)
                     .eq("id", restaurant.id)
                     .select()
                     .single();
 
             if (updateError) throw updateError;
 
+            // The database update succeeded. The new cover is now in use.
             setRestaurant(updatedRestaurant);
-            setCoverFile(null);
-            setCoverPreview("");
-            setCoverSuccess("Restaurant cover updated successfully.");
+            setIsEditingRestaurant(false);
+            setEditCoverFile(null);
 
-            const input = document.getElementById("restaurant-cover-file");
-            if (input) input.value = "";
+            if (editCoverPreview) {
+                URL.revokeObjectURL(editCoverPreview);
+            }
+
+            setEditCoverPreview("");
+            setEditSuccess("Restaurant details updated successfully.");
+
+            // Remove the previous cover only after the database update succeeds.
+            const oldCoverUrl = restaurant.cover_image_url;
+
+            if (editCoverFile && oldCoverUrl) {
+                try {
+                    const oldUrl = new URL(oldCoverUrl);
+                    const marker =
+                        "/storage/v1/object/public/restaurant-covers/";
+
+                    const markerIndex = oldUrl.pathname.indexOf(marker);
+
+                    // Only delete files hosted in this Supabase Storage bucket.
+                    if (markerIndex !== -1) {
+                        const oldPath = decodeURIComponent(
+                            oldUrl.pathname.slice(markerIndex + marker.length)
+                        );
+
+                        if (oldPath && oldPath !== uploadedPath) {
+                            const { error: cleanupError } = await supabase.storage
+                                .from("restaurant-covers")
+                                .remove([oldPath]);
+
+                            if (cleanupError) {
+                                console.error(
+                                    "Could not remove the previous cover:",
+                                    cleanupError
+                                );
+                            }
+                        }
+                    }
+                } catch (cleanupError) {
+                    console.error(
+                        "Could not process the previous cover URL:",
+                        cleanupError
+                    );
+                }
+            }
         } catch (err) {
-            console.error("Error updating restaurant cover:", err);
+            console.error("Error updating restaurant:", err);
 
-            // Remove the new upload if saving the restaurant record failed.
+            // Roll back the new upload if the database update failed.
             if (uploadedPath) {
                 const { error: cleanupError } = await supabase.storage
                     .from("restaurant-covers")
@@ -628,17 +750,85 @@ function RestaurantDetails() {
 
                 if (cleanupError) {
                     console.error(
-                        "Could not remove the unused cover image:",
+                        "Could not remove the unused cover:",
                         cleanupError
                     );
                 }
             }
 
-            setCoverError(
-                err.message || "Unable to update the restaurant cover."
+            setEditError(
+                err.message || "Unable to update restaurant details."
             );
         } finally {
-            setCoverSubmitting(false);
+            setEditSubmitting(false);
+        }
+    };
+
+
+    const handleRestaurantDelete = async () => {
+        if (!user || !canEditRestaurant || !restaurant?.id) {
+            setDeleteRestaurantError(
+                "Only moderators and admins can delete restaurants."
+            );
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Permanently delete "${restaurant.name}"?\n\n` +
+            "This will also delete its menu photos and associated content. This action cannot be undone."
+        );
+
+        if (!confirmed || deletingRestaurant) return;
+
+        setDeletingRestaurant(true);
+        setDeleteRestaurantError("");
+
+        try {
+            const {
+                data: { session },
+                error: sessionError,
+            } = await supabase.auth.getSession();
+
+            if (sessionError) throw sessionError;
+
+            const token = session?.access_token;
+
+            if (!token) {
+                throw new Error(
+                    "Your session has expired. Please log in again."
+                );
+            }
+
+            const API_URL =
+                import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+            const response = await fetch(
+                `${API_URL}/api/restaurants/${restaurant.id}`,
+                {
+                    method: "DELETE",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            const result = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error || "Unable to delete this restaurant."
+                );
+            }
+
+            // Return to the listings after successful deletion.
+            navigate("/");
+        } catch (err) {
+            console.error("Error deleting restaurant:", err);
+            setDeleteRestaurantError(
+                err.message || "Something went wrong while deleting the restaurant."
+            );
+        } finally {
+            setDeletingRestaurant(false);
         }
     };
 
@@ -969,130 +1159,287 @@ function RestaurantDetails() {
                     </section>
                 ) : restaurant ? (
                     <>
+                        
                         <section className="mt-8 border-b-2 border-ink pb-8 sm:mt-12 sm:pb-10">
-                            {restaurant.cover_image_url ? (
-                                <img
-                                    src={restaurant.cover_image_url}
-                                    alt={`${restaurant.name} venue`}
-                                    className="mb-8 h-56 w-full border border-ink object-cover sm:h-80 lg:h-96"
-                                />
-                            ) : (
-                                <div className="mb-8 flex h-56 items-center justify-center border border-ink bg-mint sm:h-80 lg:h-96">
-                                    <Utensils
-                                        size={56}
-                                        strokeWidth={1.3}
-                                    />
-                                </div>
-                            )}
+                            {isEditingRestaurant ? (
+                                <form onSubmit={handleRestaurantUpdate} className="space-y-5">
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <h1 className="text-2xl font-bold sm:text-3xl">
+                                            Edit restaurant
+                                        </h1>
 
+                                        <button
+                                            type="button"
+                                            onClick={cancelEditingRestaurant}
+                                            disabled={editSubmitting}
+                                            className="min-h-10 border border-ink px-4 py-2 text-sm font-semibold hover:bg-pink disabled:opacity-60"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
 
-                            {user && canEditCover && (
-                                <form
-                                    onSubmit={handleCoverUpload}
-                                    className="mb-8 border-y border-line py-4"
-                                >
-                                    <label
-                                        htmlFor="restaurant-cover-file"
-                                        className="block text-sm font-semibold"
-                                    >
-                                        Edit restaurant cover
-                                    </label>
-
-                                    <input
-                                        id="restaurant-cover-file"
-                                        type="file"
-                                        accept="image/jpeg,image/png,image/webp"
-                                        onChange={handleCoverFileChange}
-                                        disabled={coverSubmitting}
-                                        className="mt-2 block w-full text-sm"
-                                    />
-
-                                    {coverPreview && (
-                                        <img
-                                            src={coverPreview}
-                                            alt="Selected cover preview"
-                                            className="mt-4 h-40 w-full max-w-xl border border-ink object-cover"
+                                    <div>
+                                        <label htmlFor="edit-restaurant-name" className="block text-sm font-semibold">
+                                            Restaurant name *
+                                        </label>
+                                        <input
+                                            id="edit-restaurant-name"
+                                            value={editForm.name}
+                                            onChange={(event) =>
+                                                setEditForm({ ...editForm, name: event.target.value })
+                                            }
+                                            maxLength={150}
+                                            required
+                                            disabled={editSubmitting}
+                                            className="mt-2 min-h-11 w-full border-2 border-ink bg-paper px-3 py-2"
                                         />
-                                    )}
+                                    </div>
 
-                                    <p className="mt-2 text-xs text-muted">
-                                        JPEG, PNG, or WebP. Maximum 5 MB.
-                                    </p>
+                                    <div>
+                                        <label htmlFor="edit-restaurant-description" className="block text-sm font-semibold">
+                                            Description
+                                        </label>
+                                        <textarea
+                                            id="edit-restaurant-description"
+                                            value={editForm.description}
+                                            onChange={(event) =>
+                                                setEditForm({ ...editForm, description: event.target.value })
+                                            }
+                                            rows={4}
+                                            disabled={editSubmitting}
+                                            className="mt-2 w-full border-2 border-ink bg-paper p-3"
+                                        />
+                                    </div>
 
-                                    {coverError && (
-                                        <p role="alert" className="mt-3 text-sm text-red-700">
-                                            {coverError}
+                                    <div>
+                                        <label htmlFor="edit-restaurant-address" className="block text-sm font-semibold">
+                                            Street address
+                                        </label>
+                                        <input
+                                            id="edit-restaurant-address"
+                                            value={editForm.address}
+                                            onChange={(event) =>
+                                                setEditForm({ ...editForm, address: event.target.value })
+                                            }
+                                            disabled={editSubmitting}
+                                            className="mt-2 min-h-11 w-full border-2 border-ink bg-paper px-3 py-2"
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                                        <div>
+                                            <label htmlFor="edit-restaurant-area" className="block text-sm font-semibold">
+                                                Area / neighbourhood
+                                            </label>
+                                            <input
+                                                id="edit-restaurant-area"
+                                                value={editForm.area}
+                                                onChange={(event) =>
+                                                    setEditForm({ ...editForm, area: event.target.value })
+                                                }
+                                                disabled={editSubmitting}
+                                                className="mt-2 min-h-11 w-full border-2 border-ink bg-paper px-3 py-2"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label htmlFor="edit-restaurant-city" className="block text-sm font-semibold">
+                                                City
+                                            </label>
+                                            <input
+                                                id="edit-restaurant-city"
+                                                value={editForm.city}
+                                                onChange={(event) =>
+                                                    setEditForm({ ...editForm, city: event.target.value })
+                                                }
+                                                disabled={editSubmitting}
+                                                className="mt-2 min-h-11 w-full border-2 border-ink bg-paper px-3 py-2"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label htmlFor="edit-restaurant-maps" className="block text-sm font-semibold">
+                                            Google Maps URL
+                                        </label>
+                                        <input
+                                            id="edit-restaurant-maps"
+                                            type="url"
+                                            value={editForm.google_maps_url}
+                                            onChange={(event) =>
+                                                setEditForm({ ...editForm, google_maps_url: event.target.value })
+                                            }
+                                            placeholder="https://maps.google.com/..."
+                                            disabled={editSubmitting}
+                                            className="mt-2 min-h-11 w-full border-2 border-ink bg-paper px-3 py-2"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <p className="text-sm font-semibold">Cover image</p>
+
+                                        {editCoverPreview ? (
+                                            <img
+                                                src={editCoverPreview}
+                                                alt="New restaurant cover preview"
+                                                className="mt-3 h-48 w-full border border-ink object-cover sm:h-64"
+                                            />
+                                        ) : restaurant.cover_image_url ? (
+                                            <img
+                                                src={restaurant.cover_image_url}
+                                                alt={`${restaurant.name} current cover`}
+                                                className="mt-3 h-48 w-full border border-ink object-cover sm:h-64"
+                                            />
+                                        ) : (
+                                            <div className="mt-3 flex h-40 items-center justify-center border border-ink bg-mint">
+                                                <Utensils size={40} strokeWidth={1.3} />
+                                            </div>
+                                        )}
+
+                                        <label htmlFor="edit-restaurant-cover" className="mt-4 block text-sm font-semibold">
+                                            Choose a replacement cover (optional)
+                                        </label>
+                                        <input
+                                            id="edit-restaurant-cover"
+                                            type="file"
+                                            accept="image/jpeg,image/png,image/webp"
+                                            onChange={handleEditCoverChange}
+                                            disabled={editSubmitting}
+                                            className="mt-2 block w-full text-sm"
+                                        />
+                                        <p className="mt-2 text-xs text-muted">
+                                            JPEG, PNG, or WebP. Maximum 5 MB. Leave this empty to keep the current cover.
+                                        </p>
+                                    </div>
+
+                                    {editError && (
+                                        <p role="alert" className="text-sm text-red-700">
+                                            {editError}
                                         </p>
                                     )}
 
-                                    {coverSuccess && (
-                                        <p role="status" className="mt-3 text-sm">
-                                            {coverSuccess}
-                                        </p>
-                                    )}
+                                    
+                                    <div className="flex flex-wrap gap-3">
+                                        <button
+                                            type="submit"
+                                            disabled={editSubmitting || deletingRestaurant}
+                                            className="min-h-11 border-2 border-ink bg-mint px-5 py-3 text-sm font-bold hover:bg-teal disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            {editSubmitting ? "Saving changes..." : "Save changes"}
+                                        </button>
+                                    </div>
 
-                                    <button
-                                        type="submit"
-                                        disabled={!coverFile || coverSubmitting}
-                                        className="mt-4 min-h-11 border-2 border-ink bg-mint px-4 py-2 text-sm font-semibold hover:bg-teal disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                        {coverSubmitting ? "Uploading cover..." : "Save cover"}
-                                    </button>
+                                    <div className="mt-8 border-t-2 border-ink pt-5">
+                                        <h2 className="text-lg font-bold">Danger zone</h2>
+
+                                        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+                                            Permanently remove this restaurant and its associated menu photos.
+                                            This action cannot be undone.
+                                        </p>
+
+                                        {deleteRestaurantError && (
+                                            <p role="alert" className="mt-3 text-sm text-red-700">
+                                                {deleteRestaurantError}
+                                            </p>
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            onClick={handleRestaurantDelete}
+                                            disabled={deletingRestaurant || editSubmitting}
+                                            className="mt-4 inline-flex min-h-11 items-center gap-2 border-2 border-ink bg-pink px-4 py-2 text-sm font-bold hover:bg-paper disabled:cursor-not-allowed disabled:opacity-60"
+                                        >
+                                            <Trash2 size={16} />
+                                            {deletingRestaurant ? "Deleting restaurant..." : "Delete this restaurant"}
+                                        </button>
+                                    </div>
+
                                 </form>
-                            )}
-
-
-                            <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest">
-                                <Utensils size={16} />
-                                Restaurant details
-                            </p>
-
-                            <h1 className="mt-4 max-w-4xl break-words text-3xl font-bold leading-tight tracking-tight sm:text-5xl">
-                                {restaurant.name}
-                            </h1>
-
-                            {restaurant.description && (
-                                <p className="mt-5 max-w-3xl text-base leading-7 text-muted sm:text-lg">
-                                    {restaurant.description}
-                                </p>
-                            )}
-
-                            <div className="mt-6 flex flex-wrap items-start gap-x-6 gap-y-4">
-                                {location && (
-                                    <p className="flex items-start gap-2 text-sm sm:text-base">
-                                        <MapPin
-                                            size={19}
-                                            className="mt-0.5 shrink-0"
+                            ) : (
+                                <>
+                                    {restaurant.cover_image_url ? (
+                                        <img
+                                            src={restaurant.cover_image_url}
+                                            alt={`${restaurant.name} venue`}
+                                            className="mb-8 h-56 w-full border border-ink object-cover sm:h-80 lg:h-96"
                                         />
-                                        <span>{location}</span>
-                                    </p>
-                                )}
+                                    ) : (
+                                        <div className="mb-8 flex h-56 items-center justify-center border border-ink bg-mint sm:h-80 lg:h-96">
+                                            <Utensils size={56} strokeWidth={1.3} />
+                                        </div>
+                                    )}
 
-                                {restaurant.google_maps_url && (
-                                    <a
-                                        href={restaurant.google_maps_url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="inline-flex items-center gap-2 border-b border-ink pb-1 text-sm font-semibold hover:border-teal"
-                                    >
-                                        View on Google Maps
-                                        <ExternalLink size={15} />
-                                    </a>
-                                )}
-                            </div>
-                            
-                            {user && profile?.role === "contributor" && (
-                                <div className="mt-6">
-                                    <Link
-                                        to={`/upload-menu?restaurantId=${encodeURIComponent(id)}`}
-                                        className="inline-flex min-h-11 items-center justify-center gap-2 border-2 border-ink bg-mint px-5 py-3 text-sm font-bold hover:bg-teal"
-                                    >
-                                        <Utensils size={18} />
-                                        Upload Menu
-                                    </Link>
-                                </div>
+                                    <div className="flex flex-wrap items-start justify-between gap-4">
+                                        <div>
+                                            <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest">
+                                                <Utensils size={16} />
+                                                Restaurant details
+                                            </p>
+
+                                            <h1 className="mt-4 max-w-4xl break-words text-3xl font-bold leading-tight tracking-tight sm:text-5xl">
+                                                {restaurant.name}
+                                            </h1>
+                                        </div>
+
+                                        {canEditRestaurant && (
+                                            <button
+                                                type="button"
+                                                onClick={startEditingRestaurant}
+                                                className="min-h-11 border-2 border-ink bg-mint px-4 py-2 text-sm font-bold hover:bg-teal"
+                                            >
+                                                Edit restaurant
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {editSuccess && (
+                                        <p role="status" className="mt-4 text-sm">
+                                            {editSuccess}
+                                        </p>
+                                    )}
+
+                                    {restaurant.description && (
+                                        <p className="mt-5 max-w-3xl text-base leading-7 text-muted sm:text-lg">
+                                            {restaurant.description}
+                                        </p>
+                                    )}
+
+                                    <div className="mt-6 flex flex-wrap items-start gap-x-6 gap-y-4">
+                                        {location && (
+                                            <p className="flex items-start gap-2 text-sm sm:text-base">
+                                                <MapPin size={19} className="mt-0.5 shrink-0" />
+                                                <span>{location}</span>
+                                            </p>
+                                        )}
+
+                                        {restaurant.google_maps_url && (
+                                            <a
+                                                href={restaurant.google_maps_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="inline-flex items-center gap-2 border-b border-ink pb-1 text-sm font-semibold hover:border-teal"
+                                            >
+                                                View on Google Maps
+                                                <ExternalLink size={15} />
+                                            </a>
+                                        )}
+                                    </div>
+
+                                    {user && profile?.role === "contributor" && (
+                                        <div className="mt-6">
+                                            <Link
+                                                to={`/upload-menu?restaurantId=${encodeURIComponent(id)}`}
+                                                className="inline-flex min-h-11 items-center justify-center gap-2 border-2 border-ink bg-mint px-5 py-3 text-sm font-bold hover:bg-teal"
+                                            >
+                                                <Utensils size={18} />
+                                                Upload Menu
+                                            </Link>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </section>
+
 
 
 
