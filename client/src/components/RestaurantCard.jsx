@@ -1,8 +1,22 @@
 
-import { MapPin, Star, Utensils } from "lucide-react";
+import { useState } from "react";
+import { MapPin, Star, Utensils, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { supabase } from "../lib/supabase";
 
-function RestaurantCard({ restaurant }) {
+const API_URL =
+    import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+function RestaurantCard({ restaurant, onDeleted }) {
+    const { user, profile } = useAuth();
+
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState("");
+
+    const canDelete =
+        user && ["moderator", "admin"].includes(profile?.role);
+
     const location = [
         restaurant.area,
         restaurant.city,
@@ -13,9 +27,68 @@ function RestaurantCard({ restaurant }) {
     const displayLocation =
         location || restaurant.address || "Location not provided";
 
+    const handleDelete = async () => {
+        const confirmed = window.confirm(
+            `Permanently delete "${restaurant.name}"?\n\n` +
+            "This will also delete its menu photos and associated records. " +
+            "This action cannot be undone."
+        );
+
+        if (!confirmed) return;
+
+        setIsDeleting(true);
+        setDeleteError("");
+
+        try {
+            const {
+                data: { session },
+                error: sessionError,
+            } = await supabase.auth.getSession();
+
+            if (sessionError) {
+                throw sessionError;
+            }
+
+            const token = session?.access_token;
+
+            if (!token) {
+                throw new Error("Your session has expired. Please log in again.");
+            }
+
+            const response = await fetch(
+                `${API_URL}/api/restaurants/${restaurant.id}`,
+                {
+                    method: "DELETE",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            const result = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error || "Failed to delete the restaurant."
+                );
+            }
+
+            onDeleted?.(restaurant.id);
+        } catch (error) {
+            setDeleteError(
+                error.message || "Something went wrong while deleting."
+            );
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
     return (
-        <Link to={`/restaurants/${restaurant.id}`} className="block min-w-0 border border-ink bg-paper transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink">
-            <article>
+        <article className="min-w-0 border border-ink bg-paper">
+            <Link
+                to={`/restaurants/${restaurant.id}`}
+                className="block min-w-0 transition-colors hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
                 {restaurant.cover_image_url ? (
                     <img
                         src={restaurant.cover_image_url}
@@ -70,13 +143,34 @@ function RestaurantCard({ restaurant }) {
                                 ))}
                             </div>
                         )}
-
-                    <p className="mt-4 border-t border-line pt-3 text-sm text-muted">
-                        Menu browsing will be available here.
-                    </p>
                 </div>
-            </article>
-        </Link>
+            </Link>
+
+            {canDelete && (
+                <div className="border-t border-ink p-3">
+                    <button
+                        type="button"
+                        onClick={handleDelete}
+                        disabled={isDeleting}
+                        className="flex w-full items-center justify-center gap-2 border border-ink px-3 py-2 text-sm font-semibold transition-colors hover:bg-rose disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        <Trash2 size={16} />
+                        {isDeleting
+                            ? "Deleting..."
+                            : "Delete this restaurant"}
+                    </button>
+
+                    {deleteError && (
+                        <p
+                            role="alert"
+                            className="mt-2 text-sm text-red-700"
+                        >
+                            {deleteError}
+                        </p>
+                    )}
+                </div>
+            )}
+        </article>
     );
 }
 

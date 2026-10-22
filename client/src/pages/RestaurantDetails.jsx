@@ -11,6 +11,7 @@ import {
     Flag,
     ThumbsUp,
     ThumbsDown,
+    Trash2,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
@@ -27,7 +28,8 @@ function RestaurantDetails() {
     const [isMenusLoading, setIsMenusLoading] = useState(true);
     const [menusError, setMenusError] = useState("");
     const [selectedImage, setSelectedImage] = useState(null);
-
+    const [deletingMenuImageId, setDeletingMenuImageId] = useState(null);
+    const [menuDeleteError, setMenuDeleteError] = useState("");
     const { user, profile, loading: authLoading } = useAuth();
     
     const canEditCover = user && ["moderator", "admin"].includes(profile?.role);
@@ -240,6 +242,88 @@ function RestaurantDetails() {
     
     const canModerateComments = ["moderator", "admin"].includes(profile?.role);
 
+    
+    const canDeleteMenuImages =
+        user && ["moderator", "admin"].includes(profile?.role);
+
+    const handleMenuImageDelete = async (menu) => {
+        const confirmed = window.confirm(
+            `Permanently delete this menu photo${menu.caption ? ` ("${menu.caption}")` : ""}?\n\n` +
+            "The photo and its associated votes and reports will be deleted. This action cannot be undone."
+        );
+
+        if (!confirmed || deletingMenuImageId) return;
+
+        setDeletingMenuImageId(menu.id);
+        setMenuDeleteError("");
+
+        try {
+            const {
+                data: { session },
+                error: sessionError,
+            } = await supabase.auth.getSession();
+
+            if (sessionError) throw sessionError;
+
+            const token = session?.access_token;
+
+            if (!token) {
+                throw new Error("Your session has expired. Please log in again.");
+            }
+
+            const API_URL =
+                import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+            const response = await fetch(
+                `${API_URL}/api/menu-images/${menu.id}`,
+                {
+                    method: "DELETE",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            const result = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error || "Unable to delete this menu photo."
+                );
+            }
+
+            // Remove the photo from the page without refreshing.
+            setMenuImages((current) =>
+                current.filter((image) => image.id !== menu.id)
+            );
+
+            // Remove this photo's vote data from local state.
+            setMenuVotes((current) => {
+                const updated = { ...current };
+                delete updated[menu.id];
+                return updated;
+            });
+
+            // Close the enlarged view if it shows the deleted photo.
+            setSelectedImage((current) =>
+                current?.id === menu.id ? null : current
+            );
+
+            // Close the report form if it belongs to this photo.
+            if (reportingImage?.id === menu.id) {
+                closeReportForm();
+            }
+        } catch (err) {
+            console.error("Error deleting menu photo:", err);
+            setMenuDeleteError(
+                err.message || "Something went wrong while deleting the photo."
+            );
+        } finally {
+            setDeletingMenuImageId(null);
+        }
+    };
+
+
     const handleCommentEdit = async (commentId) => {
         const content = editingCommentText.trim();
 
@@ -316,10 +400,6 @@ function RestaurantDetails() {
             setCommentActionId("");
         }
     };
-
-
-
-
 
     
     const refreshComments = useCallback(async () => {
@@ -435,7 +515,6 @@ function RestaurantDetails() {
             setReportSubmitting(false);
         }
     };
-
 
 
     const handleCoverFileChange = (event) => {
@@ -564,10 +643,6 @@ function RestaurantDetails() {
     };
 
 
-
-
-
-
     const refreshMenuImageVotes = useCallback(async () => {
         setMenuVotesLoading(true);
         setMenuVotesError("");
@@ -621,9 +696,6 @@ function RestaurantDetails() {
             setMenuVotesLoading(false);
         }
     }, [menuImages, user]);
-
-
-
 
 
     const refreshRestaurantVotes = useCallback(async () => {
@@ -914,7 +986,6 @@ function RestaurantDetails() {
                             )}
 
 
-                            
                             {user && canEditCover && (
                                 <form
                                     onSubmit={handleCoverUpload}
@@ -969,8 +1040,6 @@ function RestaurantDetails() {
                                     </button>
                                 </form>
                             )}
-
-
 
 
                             <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest">
@@ -1365,6 +1434,30 @@ function RestaurantDetails() {
                                                         </div>
                                                     )}
                                                 </div>
+                                                
+                                                {canDeleteMenuImages && (
+                                                    <div className="border-t border-ink p-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleMenuImageDelete(menu)}
+                                                            disabled={deletingMenuImageId !== null}
+                                                            className="flex min-h-10 w-full items-center justify-center gap-2 border border-ink px-3 py-2 text-sm font-semibold transition-colors hover:bg-pink disabled:cursor-not-allowed disabled:opacity-60"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                            {deletingMenuImageId === menu.id
+                                                                ? "Deleting photo..."
+                                                                : "Delete photo"}
+                                                        </button>
+
+                                                        {menuDeleteError && deletingMenuImageId === null && (
+                                                            <p role="alert" className="mt-2 text-sm text-red-700">
+                                                                {menuDeleteError}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+
+
                                             </div>
                                         ))}
                                     </div>

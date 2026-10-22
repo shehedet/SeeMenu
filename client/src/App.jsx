@@ -10,7 +10,7 @@ import ModeratorTest from "./pages/ModeratorTest";
 import AdminTest from "./pages/AdminTest";
 import RestaurantRequest from "./pages/RestaurantRequest";
 import ContributorProfile from "./pages/ContributorProfile";
-
+import CreateRestaurant from "./pages/CreateRestaurant";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -56,6 +56,16 @@ function App() {
                 <Route path="/request-restaurant" element={<RestaurantRequest />} />
             </Route>
 
+            <Route
+                element={
+                    <ProtectedRoute allowedRoles={["moderator", "admin"]} />
+                }
+            >
+                <Route
+                    path="/create-restaurant"
+                    element={<CreateRestaurant />}
+                />
+            </Route>
 
             <Route
                 element={

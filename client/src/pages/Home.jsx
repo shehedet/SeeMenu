@@ -14,6 +14,15 @@ function Home() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState("");
 
+
+    const handleRestaurantDeleted = (restaurantId) => {
+        setRestaurants((currentRestaurants) =>
+            currentRestaurants.filter(
+                (restaurant) => restaurant.id !== restaurantId
+            )
+        );
+    };
+
     useEffect(() => {
         const controller = new AbortController();
 
@@ -133,6 +142,7 @@ function Home() {
                                 </button>
                             </form>
 
+                            
                             {user && profile?.role === "contributor" && (
                                 <Link
                                     to="/request-restaurant"
@@ -141,6 +151,17 @@ function Home() {
                                     + Suggest a Restaurant
                                 </Link>
                             )}
+
+                            {user &&
+                                (profile?.role === "moderator" || profile?.role === "admin") && (
+                                    <Link
+                                        to="/create-restaurant"
+                                        className="flex shrink-0 items-center justify-center border-2 border-ink bg-mint px-5 py-3 text-sm font-bold hover:bg-teal"
+                                    >
+                                        + Create a Restaurant
+                                    </Link>
+                                )}
+
                         </div>
 
                         <p className="mt-3 text-sm text-muted">
@@ -208,6 +229,7 @@ function Home() {
                                 <RestaurantCard
                                     key={restaurant.id}
                                     restaurant={restaurant}
+                                    onDeleted={handleRestaurantDeleted}
                                 />
                             ))}
                         </div>
