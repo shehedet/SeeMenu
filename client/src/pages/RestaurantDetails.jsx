@@ -1440,10 +1440,6 @@ function RestaurantDetails() {
                             )}
                         </section>
 
-
-
-
-
                         <div className="mt-8 border-t border-line pt-5">
                             <h2 className="text-lg font-bold">
                                 Community votes
@@ -1522,9 +1518,6 @@ function RestaurantDetails() {
                             )}
                         </div>
 
-
-
-                        
                         <section className="py-10 sm:py-12">
                             <p className="text-sm font-semibold uppercase tracking-widest">
                                 Menu
