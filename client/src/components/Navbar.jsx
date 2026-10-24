@@ -102,35 +102,6 @@ function Navbar({ searchQuery, onSearchChange }) {
 
                             {accountMenuOpen && (
                                 <div className="absolute right-0 top-full z-30 mt-2 w-64 border-2 border-ink bg-paper">
-                                    {/* {profile?.username && (
-                                        <Link
-                                            to={`/contributors/${encodeURIComponent(profile.username)}`}>
-                                            <button
-                                                type="button"
-                                                onClick={() => setAccountMenuOpen(false)}
-                                                className="w-full border-b border-line items-center gap-2 px-4 py-3 text-left text-sm font-semibold hover:bg-mint"
-                                            >
-                                                <p className="font-bold">
-                                                    {profile?.username || "Your account"}
-                                                </p>
-                                                <p className="mt-1 break-all text-xs text-muted">
-                                                    {user.email}
-                                                </p>
-                                                {profile?.role === "moderator" ? (
-                                                    <p className="mt-1 text-xs text-muted">
-                                                        Moderator
-                                                    </p>
-                                                    ) : profile?.role === "admin" ? (
-                                                    <p className="mt-1 text-xs text-muted">
-                                                        Admin
-                                                    </p>
-                                                    ) : null}
-                                            </button>
-                                        </Link>
-                                    )} */}
-
-
-
                                     {profilePath && (
                                         <Link
                                             to={profilePath}

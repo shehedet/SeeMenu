@@ -138,7 +138,7 @@ function Home() {
                                     onChange={(event) =>
                                         setSearchQuery(event.target.value)
                                     }
-                                    placeholder="Try biryani, Dhanmondi, or a restaurant..."
+                                    placeholder="Try a restaurant, or an area..."
                                     aria-label="Search food places"
                                     className="min-w-0 flex-1 bg-transparent px-3 py-3 outline-none placeholder:text-muted"
                                 />
@@ -171,7 +171,7 @@ function Home() {
                         </div>
 
                         <p className="mt-3 text-sm text-muted">
-                            Search by restaurant, food type, or area.
+                            Search by restaurant, or area.
                         </p>
                     </div>
                 </section>
@@ -256,7 +256,7 @@ function Home() {
                                             onClick={() =>
                                                 setVisibleCount((current) => current + 6)
                                             }
-                                            className="min-h-11 border-2 border-ink bg-mint px-8 py-3 text-sm font-bold hover:bg-teal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                                            className="min-h-11 border-1 border-ink bg-mint px-8 py-3 text-sm font-bold hover:bg-teal focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
                                         >
                                             See more
                                         </button>
