@@ -48,7 +48,7 @@ function Navbar({ searchQuery, onSearchChange }) {
 
     return (
         <header className="sticky top-0 z-50 border-b-2 border-ink bg-paper">
-            <nav className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-4 sm:px-6 lg:flex-nowrap lg:px-8">
+            <nav className="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-4 py-3 sm:px-6 lg:flex-nowrap lg:px-8">
                 <Link
                     to="/"
                     className="flex shrink-0 items-center gap-2"
